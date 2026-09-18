@@ -61,6 +61,20 @@ func TestLoadPrivateKeyRejectsEncrypted(t *testing.T) {
 	}
 }
 
+func TestConfigDefaultsTeamIDToClientID(t *testing.T) {
+	cfg := Config{ClientID: "BUSINESSAPI.client", KeyID: "KEYID456"}.withDefaults()
+	if cfg.TeamID != cfg.ClientID {
+		t.Fatalf("TeamID = %q, want it to default to ClientID %q", cfg.TeamID, cfg.ClientID)
+	}
+
+	// An explicit TeamID is still honored (e.g. if an account ever needs one
+	// different from its Client ID).
+	cfg = Config{ClientID: "BUSINESSAPI.client", TeamID: "OVERRIDE", KeyID: "KEYID456"}.withDefaults()
+	if cfg.TeamID != "OVERRIDE" {
+		t.Fatalf("TeamID = %q, want explicit override OVERRIDE to be preserved", cfg.TeamID)
+	}
+}
+
 func TestBuildClientAssertionShape(t *testing.T) {
 	path := writeTestKey(t)
 	cfg := Config{ClientID: "BUSINESSAPI.client", TeamID: "TEAMID123", KeyID: "KEYID456"}.withDefaults()

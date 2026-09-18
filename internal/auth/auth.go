@@ -77,6 +77,14 @@ func (c Config) withDefaults() Config {
 	if c.Scope == "" {
 		c.Scope = DefaultScope
 	}
+	if c.TeamID == "" {
+		// Apple Business's API account screen only ever shows a Client ID
+		// and a Key ID -- there's no separate "Team ID" field to find. In
+		// practice the `iss` claim is just the Client ID again, so that's
+		// the default; --team-id/ABM_TEAM_ID remains as an override in case
+		// a given account ever needs something different.
+		c.TeamID = c.ClientID
+	}
 	return c
 }
 
@@ -101,8 +109,8 @@ type TokenSource struct {
 // ready-to-use TokenSource.
 func NewTokenSource(cfg Config, httpClient *http.Client) (*TokenSource, error) {
 	cfg = cfg.withDefaults()
-	if cfg.ClientID == "" || cfg.TeamID == "" || cfg.KeyID == "" || cfg.PrivateKeyPath == "" {
-		return nil, fmt.Errorf("auth: client ID, team ID, key ID, and private key path are all required")
+	if cfg.ClientID == "" || cfg.KeyID == "" || cfg.PrivateKeyPath == "" {
+		return nil, fmt.Errorf("auth: client ID, key ID, and private key path are all required")
 	}
 	key, err := LoadPrivateKey(cfg.PrivateKeyPath)
 	if err != nil {

@@ -8,13 +8,19 @@ build` works completely offline once you have the source.
 
 ## 1. Create an API account in Apple Business Manager
 
-1. Sign in to Apple Business Manager as an Administrator or Site Manager and
-   go to **Preferences > API > Get Started**.
-2. Create an API account (give it a label). Apple generates a private key
-   for you to download -- **save it immediately, it cannot be downloaded
-   again.**
-3. Note the **Client ID** (looks like `BUSINESSAPI.xxxxxxxx-xxxx-...`), the
-   **Key ID**, and the **Team ID** (issuer) shown alongside it.
+1. You need the **Organization Administrator** role to do this (the only
+   role that can create API accounts). Go to **Settings > API > Add API
+   Account**.
+2. Give it a name (e.g. `abmctl`) and a **Role Access** of **IT
+   Administrator** -- that's the role scoped to devices and device
+   management services, which is all this tool touches. (Organization
+   Administrator would also work, but grants far more than a read-only
+   device/MDM-server tool needs.)
+3. Apple generates a private key for you to download -- **save it
+   immediately, it cannot be downloaded again.**
+4. Note the **Client ID** (looks like `BUSINESSAPI.xxxxxxxx-xxxx-...`) and
+   the **Key ID** shown alongside it. There's no separate "Team ID" field in
+   the UI -- see the note below.
 
 ## 2. Prepare the private key
 
@@ -39,10 +45,16 @@ command):
 
 ```bash
 export ABM_CLIENT_ID="BUSINESSAPI.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-export ABM_TEAM_ID="your-team-id"
 export ABM_KEY_ID="your-key-id"
 export ABM_PRIVATE_KEY_PATH="/path/to/abm_key_pkcs8.pem"
 ```
+
+`ABM_TEAM_ID` is deliberately not set here: Apple Business's API account
+screen only shows a Client ID and a Key ID, no separate Team ID, and in
+practice the JWT's `iss` claim is just the Client ID again. `abmctl`
+defaults `--team-id`/`ABM_TEAM_ID` to your Client ID automatically -- only
+set it explicitly if you ever hit an auth error suggesting your account
+needs something different.
 
 ## 4. Build and try it
 
@@ -86,8 +98,9 @@ Apple's Business Manager API uses OAuth2 `client_credentials` with a JWT
 for Sign in with Apple):
 
 1. Build a JWT: header `{alg: ES256, kid: <Key ID>, typ: JWT}`, claims
-   `{iss: <Team ID>, sub: <Client ID>, aud: <fixed Apple audience URL>, iat,
-   exp, jti}`, signed with your EC P-256 private key.
+   `{iss: <Client ID>, sub: <Client ID>, aud: <fixed Apple audience URL>, iat,
+   exp, jti}` (ABM has no separate Team ID, so both `iss` and `sub` are your
+   Client ID), signed with your EC P-256 private key.
 2. POST it to `https://account.apple.com/auth/oauth2/token` as a
    `client_credentials` grant to get a bearer access token (~1h lifetime).
 3. Send `Authorization: Bearer <token>` on API calls to
@@ -101,13 +114,12 @@ while building this, so the request/response shapes here (JWT claim names,
 the `aud` value, endpoint paths like `/orgDevices` and `/mdmServers`, and
 the JSON:API `links.next` pagination style) are reconstructed from several
 independent third-party write-ups and open-source Go/Swift clients for this
-same API, cross-checked against each other. `auth test` and `mdm-servers
-list` are the two commands to run first against your real account -- if
-either behaves unexpectedly, the most likely culprits are the `iss` claim
-(some sources suggest it may need to be the Client ID again rather than the
-Team ID) or the exact device/server attribute names, both of which are easy
-to adjust in `internal/auth/auth.go` and `cmd_devices.go` /
-`cmd_mdmservers.go` respectively. `--output json` always shows the raw
+same API, cross-checked against each other (and, for the role/account setup
+steps and the `iss` claim, against the real account creation flow). `auth
+test` and `mdm-servers list` are the two commands to run first against your
+real account -- if either behaves unexpectedly, the exact device/server
+attribute names are the most likely remaining culprit, and are easy to
+adjust in `cmd_devices.go` / `cmd_mdmservers.go`. `--output json` always shows the raw
 payload regardless, so nothing is hidden if the table view's column guesses
 are off.
 
