@@ -162,6 +162,11 @@ func TestAccessTokenExchangeAndCache(t *testing.T) {
 		KeyID:          "KEYID456",
 		PrivateKeyPath: path,
 		TokenURL:       srv.URL,
+		// This test is specifically about the in-memory cache inside a single
+		// TokenSource; the on-disk cache (shared across process invocations)
+		// has its own dedicated tests in cache_test.go and would otherwise
+		// have this test read/write the real user config directory.
+		NoCache: true,
 	}
 	ts, err := NewTokenSource(cfg, srv.Client())
 	if err != nil {

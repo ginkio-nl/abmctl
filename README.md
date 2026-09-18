@@ -1,10 +1,19 @@
 # abmctl
 
-A small, dependency-free, read-only CLI for the Apple Business Manager (ABM)
-API. Currently covers MDM servers and organization devices.
+A small, read-only CLI for the Apple Business Manager (ABM) API. Currently
+covers MDM servers and organization devices.
 
-Built with the Go standard library only (no third-party modules) -- `go
-build` works completely offline once you have the source.
+Commands are built on [Kong](https://github.com/alecthomas/kong): the whole
+command tree, flags, env-var bindings, and `--help` text are all generated
+from struct tags on `Globals`/`CLI` in `main.go`, so adding a subcommand
+means adding a field and a `Run` method there -- not hand-editing a usage
+string or a switch statement.
+
+```bash
+go get github.com/alecthomas/kong@latest
+go mod tidy
+go build -o abmctl .
+```
 
 ## 1. Create an API account in Apple Business Manager
 
@@ -59,6 +68,8 @@ needs something different.
 ## 4. Build and try it
 
 ```bash
+go get github.com/alecthomas/kong@latest  # only needed once
+go mod tidy
 go build -o abmctl .
 ./abmctl auth test
 ```
@@ -83,13 +94,35 @@ abmctl devices get <id>
 Global flags (valid on every command): `--client-id`, `--team-id`,
 `--key-id`, `--private-key`, `--output table|json` (default `table`),
 `--debug` (prints request/response trace to stderr, never the key or full
-token).
+token), `--no-token-cache` (see below).
 
 `--all` follows pagination (`links.next`) and fetches every page; without
 it you get just the first page, which is faster for a quick look.
 
 `--output json` prints the full, untouched API response for each resource --
 useful both for scripting and for seeing fields the table view doesn't show.
+
+## Access token caching
+
+Every `abmctl` command is a fresh OS process, so without help it would
+re-authenticate (a full JWT build + token exchange round trip to Apple)
+on *every single invocation*, even two commands run seconds apart.
+`abmctl` avoids that by caching the access token to disk between runs, at
+`<user config dir>/abmctl/token-<client id>.json` -- for example
+`~/Library/Application Support/abmctl/token-BUSINESSAPI.xxx.json` on macOS,
+or `~/.config/abmctl/token-<client id>.json` on Linux. The cache file is
+per Client ID, so switching between multiple ABM accounts doesn't thrash a
+shared cache, and it's written with `0600` permissions since it holds a
+live bearer token.
+
+A cached token is only reused while it's still valid (Apple's tokens last
+about an hour) and matches the current client ID and scope; anything else
+falls back to a normal token exchange automatically. Pass `--no-token-cache`
+to bypass the cache entirely -- useful for troubleshooting auth, or if
+you're testing against a couple of different keys in quick succession.
+Caching is best-effort: if the cache can't be read or written for any
+reason (permissions, no config dir, ...), `abmctl` just falls back to
+authenticating fresh rather than failing the command.
 
 ## How authentication works
 
@@ -126,7 +159,7 @@ are off.
 ## Project layout
 
 ```
-main.go                     CLI entry point, flag parsing, command dispatch
+main.go                     CLI struct (Kong), global flags, command tree
 cmd_auth.go                 `auth test`
 cmd_mdmservers.go           `mdm-servers list|get`
 cmd_devices.go              `devices list|get`
@@ -134,3 +167,18 @@ output.go                   table/JSON rendering
 internal/auth/              JWT client assertion + OAuth2 token exchange
 internal/apiclient/         HTTP client, pagination, generic resource type
 ```
+
+### Adding a new subcommand
+
+Because the CLI is Kong-driven, adding e.g. `abmctl users list` doesn't touch
+`main.go`'s command tree logic at all:
+
+1. Add a `Users UsersCmd `cmd:"" name:"users" help:"..."`` field to the `CLI`
+   struct in `main.go`.
+2. Add a new `cmd_users.go` with a `UsersCmd` struct (nesting `List`/`Get`
+   the same way `DevicesCmd` does) and a `Run(g *Globals, client
+   *apiclient.Client) error` method on each leaf command.
+
+`--help` at every level, env-var binding, and flag validation all come for
+free from the struct tags -- there's no usage string or switch statement to
+remember to update.

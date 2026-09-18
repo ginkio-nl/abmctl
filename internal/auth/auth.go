@@ -65,6 +65,10 @@ type Config struct {
 	TokenURL string
 	Audience string
 	Scope    string
+
+	// NoCache disables the on-disk access-token cache (see cache.go),
+	// forcing a fresh client-credentials exchange on every AccessToken call.
+	NoCache bool
 }
 
 func (c Config) withDefaults() Config {
@@ -99,6 +103,12 @@ type TokenSource struct {
 	accessToken string
 	expiresAt   time.Time
 
+	// cachePath, when non-empty, is where the access token is persisted to
+	// disk between separate abmctl process invocations (see cache.go). It's
+	// resolved once in NewTokenSource and left empty if caching is disabled
+	// or the cache directory can't be determined.
+	cachePath string
+
 	// Debug, when set, is called with human-readable trace lines for
 	// troubleshooting auth failures (never includes the private key or
 	// full token values).
@@ -119,7 +129,16 @@ func NewTokenSource(cfg Config, httpClient *http.Client) (*TokenSource, error) {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &TokenSource{cfg: cfg, key: key, http: httpClient}, nil
+
+	ts := &TokenSource{cfg: cfg, key: key, http: httpClient}
+	if !cfg.NoCache {
+		// Best-effort: if we can't work out where to cache tokens (e.g. no
+		// home directory), just skip caching rather than failing the command.
+		if path, err := DefaultCachePath(cfg.ClientID); err == nil {
+			ts.cachePath = path
+		}
+	}
+	return ts, nil
 }
 
 // LoadPrivateKey reads and parses an EC P-256 private key in PEM format.
@@ -166,12 +185,23 @@ func parseECKey(der []byte) (*ecdsa.PrivateKey, error) {
 }
 
 // AccessToken returns a valid bearer token, fetching a new one if the cached
-// one is missing or about to expire.
+// one is missing or about to expire. Since abmctl re-execs as a brand new
+// process for every command, an in-memory-only cache would mean every single
+// command re-authenticates from scratch; AccessToken also checks (and
+// populates) an on-disk cache so a still-valid token survives across
+// separate abmctl invocations instead of minting a fresh one each time.
 func (t *TokenSource) AccessToken(ctx context.Context) (string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if t.accessToken != "" && time.Now().Add(expiryLeeway).Before(t.expiresAt) {
+		return t.accessToken, nil
+	}
+
+	if tok, ok := t.loadCachedToken(); ok {
+		t.accessToken = tok.AccessToken
+		t.expiresAt = tok.ExpiresAt
+		t.trace("reusing cached access token from %s (valid until %s)", t.cachePath, tok.ExpiresAt.Format(time.RFC3339))
 		return t.accessToken, nil
 	}
 
@@ -187,6 +217,7 @@ func (t *TokenSource) AccessToken(ctx context.Context) (string, error) {
 
 	t.accessToken = token
 	t.expiresAt = time.Now().Add(expiresIn)
+	t.saveCachedToken()
 	return t.accessToken, nil
 }
 

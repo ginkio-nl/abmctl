@@ -3,29 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"abmctl/internal/apiclient"
 )
 
-func dispatchAuth(args []string) error {
-	if len(args) == 0 || args[0] != "test" {
-		return fmt.Errorf("usage: abmctl auth test")
-	}
-	return runAuthTest(args[1:])
+// AuthCmd groups authentication-related utility commands.
+type AuthCmd struct {
+	Test AuthTestCmd `cmd:"" name:"test" help:"Fetch an access token and confirm your credentials work, without calling any business endpoint."`
 }
 
-// runAuthTest exercises the full JWT-assertion -> token-exchange flow and
+// AuthTestCmd exercises the full JWT-assertion -> token-exchange flow and
 // reports success/failure, so credential problems can be diagnosed without
 // guessing at an unrelated API error.
-func runAuthTest(args []string) error {
-	fs, g := newFlagSet("abmctl auth test")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
+type AuthTestCmd struct{}
 
-	client, err := buildClient(g)
-	if err != nil {
-		return err
-	}
-
+func (c *AuthTestCmd) Run(g *Globals, client *apiclient.Client) error {
 	token, err := client.Tokens.AccessToken(context.Background())
 	if err != nil {
 		return err

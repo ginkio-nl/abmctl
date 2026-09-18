@@ -2,8 +2,15 @@ package main
 
 import (
 	"context"
-	"fmt"
+
+	"abmctl/internal/apiclient"
 )
+
+// DevicesCmd groups organization device commands.
+type DevicesCmd struct {
+	List DevicesListCmd `cmd:"" name:"list" help:"List organization devices."`
+	Get  DevicesGetCmd  `cmd:"" name:"get" help:"Get a single device by ID."`
+}
 
 var deviceColumns = []column{
 	{header: "SERIAL", keys: []string{"serialNumber"}},
@@ -12,61 +19,31 @@ var deviceColumns = []column{
 	{header: "ADDED", keys: []string{"addedToOrgDateTime", "orderDateTime"}},
 }
 
-func dispatchDevices(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: abmctl devices <list|get> ...")
-	}
-	switch args[0] {
-	case "list":
-		return runDevicesList(args[1:])
-	case "get":
-		return runDevicesGet(args[1:])
-	default:
-		return fmt.Errorf("usage: abmctl devices <list|get> ...")
-	}
+// DevicesListCmd lists devices, optionally scoped to one MDM server.
+type DevicesListCmd struct {
+	All         bool   `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
+	MDMServerID string `name:"mdm-server-id" help:"List only devices assigned to this MDM server."`
 }
 
-func runDevicesList(args []string) error {
-	fs, g := newFlagSet("abmctl devices list")
-	all := fs.Bool("all", false, "Follow pagination and fetch every page (default: first page only).")
-	mdmServerID := fs.String("mdm-server-id", "", "List only devices assigned to this MDM server.")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	client, err := buildClient(g)
-	if err != nil {
-		return err
-	}
-
+func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
 	path := "/orgDevices"
-	if *mdmServerID != "" {
-		path = "/mdmServers/" + *mdmServerID + "/relationships/devices"
+	if c.MDMServerID != "" {
+		path = "/mdmServers/" + c.MDMServerID + "/relationships/devices"
 	}
-
-	resources, err := client.GetList(context.Background(), path, nil, *all)
+	resources, err := client.GetList(context.Background(), path, nil, c.All)
 	if err != nil {
 		return err
 	}
 	return printResources(g.Output, resources, deviceColumns)
 }
 
-func runDevicesGet(args []string) error {
-	fs, g := newFlagSet("abmctl devices get")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: abmctl devices get <id>")
-	}
-	id := fs.Arg(0)
+// DevicesGetCmd fetches one device by ID.
+type DevicesGetCmd struct {
+	ID string `arg:"" name:"id" help:"Device ID."`
+}
 
-	client, err := buildClient(g)
-	if err != nil {
-		return err
-	}
-
-	resource, err := client.GetOne(context.Background(), "/orgDevices/"+id)
+func (c *DevicesGetCmd) Run(g *Globals, client *apiclient.Client) error {
+	resource, err := client.GetOne(context.Background(), "/orgDevices/"+c.ID)
 	if err != nil {
 		return err
 	}

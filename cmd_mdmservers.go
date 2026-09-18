@@ -2,8 +2,15 @@ package main
 
 import (
 	"context"
-	"fmt"
+
+	"abmctl/internal/apiclient"
 )
+
+// MDMServersCmd groups MDM server commands.
+type MDMServersCmd struct {
+	List MDMServersListCmd `cmd:"" name:"list" help:"List MDM servers in the organization."`
+	Get  MDMServersGetCmd  `cmd:"" name:"get" help:"Get a single MDM server by ID."`
+}
 
 var mdmServerColumns = []column{
 	{header: "NAME", keys: []string{"serverName", "name"}},
@@ -11,55 +18,26 @@ var mdmServerColumns = []column{
 	{header: "UPDATED", keys: []string{"updatedDateTime", "updatedAt"}},
 }
 
-func dispatchMDMServers(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: abmctl mdm-servers <list|get> ...")
-	}
-	switch args[0] {
-	case "list":
-		return runMDMServersList(args[1:])
-	case "get":
-		return runMDMServersGet(args[1:])
-	default:
-		return fmt.Errorf("usage: abmctl mdm-servers <list|get> ...")
-	}
+// MDMServersListCmd lists all MDM servers.
+type MDMServersListCmd struct {
+	All bool `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
 }
 
-func runMDMServersList(args []string) error {
-	fs, g := newFlagSet("abmctl mdm-servers list")
-	all := fs.Bool("all", false, "Follow pagination and fetch every page (default: first page only).")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	client, err := buildClient(g)
-	if err != nil {
-		return err
-	}
-
-	resources, err := client.GetList(context.Background(), "/mdmServers", nil, *all)
+func (c *MDMServersListCmd) Run(g *Globals, client *apiclient.Client) error {
+	resources, err := client.GetList(context.Background(), "/mdmServers", nil, c.All)
 	if err != nil {
 		return err
 	}
 	return printResources(g.Output, resources, mdmServerColumns)
 }
 
-func runMDMServersGet(args []string) error {
-	fs, g := newFlagSet("abmctl mdm-servers get")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: abmctl mdm-servers get <id>")
-	}
-	id := fs.Arg(0)
+// MDMServersGetCmd fetches one MDM server by ID.
+type MDMServersGetCmd struct {
+	ID string `arg:"" name:"id" help:"MDM server ID."`
+}
 
-	client, err := buildClient(g)
-	if err != nil {
-		return err
-	}
-
-	resource, err := client.GetOne(context.Background(), "/mdmServers/"+id)
+func (c *MDMServersGetCmd) Run(g *Globals, client *apiclient.Client) error {
+	resource, err := client.GetOne(context.Background(), "/mdmServers/"+c.ID)
 	if err != nil {
 		return err
 	}
