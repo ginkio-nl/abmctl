@@ -49,8 +49,11 @@ repeats this conversion command in the error message.
 
 ## 3. Configure credentials
 
-Set these environment variables (or pass the equivalent flags on every
-command):
+There are two ways to give `abmctl` credentials; pick whichever fits how
+many ABM accounts you manage.
+
+**Environment variables or flags** -- the simplest option for a single
+account:
 
 ```bash
 export ABM_CLIENT_ID="BUSINESSAPI.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -65,6 +68,15 @@ defaults `--team-id`/`ABM_TEAM_ID` to your Client ID automatically -- only
 set it explicitly if you ever hit an auth error suggesting your account
 needs something different.
 
+**A config file** -- lets one file hold several named ABM accounts, so you
+can switch between them with `--account` instead of re-exporting env vars.
+See [Multiple accounts (config file)](#multiple-accounts-config-file)
+below.
+
+Flags and env vars always take priority over the config file, so you can
+still override a single value (e.g. `--client-id`) on the command line even
+when a config file is in use.
+
 ## 4. Build and try it
 
 ```bash
@@ -73,6 +85,10 @@ go mod tidy
 go build -o abmctl .
 ./abmctl auth test
 ```
+
+Or with the included `Makefile`: `make build` (`./abmctl`), `make run`, `make test`,
+and `make install` (runs `go install .`, placing `abmctl` in `$(go env GOBIN)`
+or `$(go env GOPATH)/bin` -- make sure that directory is on your `PATH`).
 
 `auth test` runs the full flow (builds a signed JWT client assertion,
 exchanges it for a bearer access token) without touching any business
@@ -84,23 +100,91 @@ set up correctly before doing anything else.
 ```
 abmctl auth test
 
+abmctl accounts list
+abmctl accounts set-default <name>
+
 abmctl mdm-servers list [--all]
 abmctl mdm-servers get <id>
 
 abmctl devices list [--all] [--mdm-server-id ID]
 abmctl devices get <id>
+
+abmctl users list [--all]
+abmctl users get <id>
 ```
 
 Global flags (valid on every command): `--client-id`, `--team-id`,
-`--key-id`, `--private-key`, `--output table|json` (default `table`),
-`--debug` (prints request/response trace to stderr, never the key or full
-token), `--no-token-cache` (see below).
+`--key-id`, `--private-key`, `--config`, `--account` (see below),
+`--output table|json|csv` (default `table`), `--debug` (prints
+request/response trace to stderr, never the key or full token),
+`--no-token-cache` (see below).
 
 `--all` follows pagination (`links.next`) and fetches every page; without
 it you get just the first page, which is faster for a quick look.
 
 `--output json` prints the full, untouched API response for each resource --
 useful both for scripting and for seeing fields the table view doesn't show.
+
+`--output csv` prints the same columns as the table view, but as
+comma-separated values (ID column first) suitable for piping into a
+spreadsheet or another tool. Unlike the table view, missing fields are
+written as empty cells rather than `-`.
+
+## Multiple accounts (config file)
+
+If you manage more than one ABM account, put them all in one config file
+instead of re-exporting `ABM_*` env vars every time you switch:
+
+```json
+{
+  "default_account": "acme",
+  "accounts": {
+    "acme": {
+      "client_id": "BUSINESSAPI.acme-xxxx-...",
+      "key_id": "acme-key-id",
+      "private_key": "acme.pem"
+    },
+    "globex": {
+      "client_id": "BUSINESSAPI.globex-xxxx-...",
+      "key_id": "globex-key-id",
+      "private_key": "globex.pem"
+    }
+  }
+}
+```
+
+By default `abmctl` looks for this file at `<user config dir>/abmctl/config.json`
+-- e.g. `~/Library/Application Support/abmctl/config.json` on macOS, or
+`~/.config/abmctl/config.json` on Linux -- and only uses it if it happens to
+exist; without one, `abmctl` behaves exactly as it did before, reading
+credentials from flags/env vars. Pass `--config <path>` (or `ABM_CONFIG`) to
+point at a file elsewhere instead; unlike the default path, an explicit
+`--config` must exist.
+
+A relative `private_key` path (as above) is resolved relative to the config
+file's own directory, not your current directory, so a config file and its
+keys can live together and be referenced from anywhere.
+
+Which account is used:
+
+1. `--account <name>` (or `ABM_ACCOUNT`), if given.
+2. Otherwise the file's `default_account`.
+3. Otherwise, if the file defines exactly one account, that one.
+4. Otherwise it's ambiguous and `abmctl` errors out naming the accounts you
+   can choose from.
+
+Run `abmctl accounts list` to see every account defined in the config file
+and which one is the default, and `abmctl accounts set-default <name>` to
+change it (this edits `default_account` in the config file in place). Like
+`list`, `set-default` doesn't need any ABM credentials itself, so both work
+even in case 4 above, before you've decided which `--account` to use.
+
+`team_id` is also a valid per-account field, for the same rare case
+`--team-id`/`ABM_TEAM_ID` exists for (see above). `--client-id`,
+`--key-id`, `--private-key`, and their `ABM_*` env vars still work as
+before and take priority over the config file field by field -- e.g.
+`--client-id` alone overrides just the client ID from the selected account,
+leaving its key ID and private key from the config file untouched.
 
 ## Access token caching
 
@@ -150,9 +234,9 @@ independent third-party write-ups and open-source Go/Swift clients for this
 same API, cross-checked against each other (and, for the role/account setup
 steps and the `iss` claim, against the real account creation flow). `auth
 test` and `mdm-servers list` are the two commands to run first against your
-real account -- if either behaves unexpectedly, the exact device/server
+real account -- if either behaves unexpectedly, the exact device/server/user
 attribute names are the most likely remaining culprit, and are easy to
-adjust in `cmd_devices.go` / `cmd_mdmservers.go`. `--output json` always shows the raw
+adjust in `cmd_devices.go` / `cmd_mdmservers.go` / `cmd_users.go`. `--output json` always shows the raw
 payload regardless, so nothing is hidden if the table view's column guesses
 are off.
 
@@ -161,11 +245,14 @@ are off.
 ```
 main.go                     CLI struct (Kong), global flags, command tree
 cmd_auth.go                 `auth test`
+cmd_accounts.go             `accounts list|set-default`
 cmd_mdmservers.go           `mdm-servers list|get`
 cmd_devices.go              `devices list|get`
-output.go                   table/JSON rendering
+cmd_users.go                `users list|get`
+output.go                   table/JSON/CSV rendering
 internal/auth/              JWT client assertion + OAuth2 token exchange
 internal/apiclient/         HTTP client, pagination, generic resource type
+internal/config/            multi-account config file
 ```
 
 ### Adding a new subcommand

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"abmctl/internal/apiclient"
@@ -16,20 +18,29 @@ type column struct {
 	keys   []string
 }
 
-// printResources renders resources either as pretty-printed JSON (the full,
-// authoritative payload) or as a best-effort table using the given columns.
+// printResources renders resources as pretty-printed JSON (the full,
+// authoritative payload), CSV, or a best-effort table using the given
+// columns, depending on output.
 func printResources(output string, resources []apiclient.Resource, cols []column) error {
-	if output == "json" {
+	switch output {
+	case "json":
 		return printJSON(resources)
+	case "csv":
+		return printCSV(resources, cols)
+	default:
+		return printTable(resources, cols)
 	}
-	return printTable(resources, cols)
 }
 
 func printResource(output string, resource apiclient.Resource, cols []column) error {
-	if output == "json" {
+	switch output {
+	case "json":
 		return printJSON(resource)
+	case "csv":
+		return printCSV([]apiclient.Resource{resource}, cols)
+	default:
+		return printTable([]apiclient.Resource{resource}, cols)
 	}
-	return printTable([]apiclient.Resource{resource}, cols)
 }
 
 func printJSON(v any) error {
@@ -54,28 +65,57 @@ func printTable(resources []apiclient.Resource, cols []column) error {
 	return nil
 }
 
+// printCSV writes resources as CSV: an ID column followed by cols, one
+// resource per row. Missing values are written as empty fields rather than
+// table view's "-", since CSV output is meant for scripting/spreadsheets.
+func printCSV(resources []apiclient.Resource, cols []column) error {
+	w := csv.NewWriter(os.Stdout)
+	defer w.Flush()
+
+	header := make([]string, len(cols)+1)
+	header[0] = "ID"
+	for i, c := range cols {
+		header[i+1] = c.header
+	}
+	if err := w.Write(header); err != nil {
+		return err
+	}
+
+	for _, r := range resources {
+		row := make([]string, len(cols)+1)
+		row[0] = r.ID
+		for i, c := range cols {
+			row[i+1] = r.FirstStr(c.keys...)
+		}
+		if err := w.Write(row); err != nil {
+			return err
+		}
+	}
+	return w.Error()
+}
+
 func headerRow(cols []column) string {
-	s := ""
+	var s strings.Builder
 	for i, c := range cols {
 		if i > 0 {
-			s += "\t"
+			s.WriteString("\t")
 		}
-		s += c.header
+		s.WriteString(c.header)
 	}
-	return s
+	return s.String()
 }
 
 func valueRow(r apiclient.Resource, cols []column) string {
-	s := ""
+	var s strings.Builder
 	for i, c := range cols {
 		if i > 0 {
-			s += "\t"
+			s.WriteString("\t")
 		}
 		v := r.FirstStr(c.keys...)
 		if v == "" {
 			v = "-"
 		}
-		s += v
+		s.WriteString(v)
 	}
-	return s
+	return s.String()
 }

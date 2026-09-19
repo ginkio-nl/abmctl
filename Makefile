@@ -1,6 +1,6 @@
 BINARY := abmctl
 
-.PHONY: build run test clean
+.PHONY: build run test install clean
 
 build:
 	go build -o $(BINARY) .
@@ -10,6 +10,9 @@ run: build
 
 test:
 	go test ./...
+
+install:
+	go install .
 
 clean:
 	rm -f $(BINARY)
