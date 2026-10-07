@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -145,5 +146,32 @@ func TestDurationAcceptsDaysAndGoDurations(t *testing.T) {
 		if err := d.UnmarshalText([]byte(in)); err == nil {
 			t.Errorf("%q: expected an error", in)
 		}
+	}
+}
+
+func TestSortByOrderDate(t *testing.T) {
+	device := func(serial, ordered string) apiclient.Resource {
+		attrs := map[string]any{"serialNumber": serial}
+		if ordered != "" {
+			attrs["orderDateTime"] = ordered
+		}
+		return apiclient.Resource{ID: serial, Attributes: attrs}
+	}
+	devices := []apiclient.Resource{
+		device("NODATE", ""),
+		device("NEW", "2025-01-01T00:00:00Z"),
+		device("OLD", "2019-06-01T12:00:00.5Z"),
+		device("TIE-B", "2022-01-01T00:00:00Z"),
+		device("TIE-A", "2022-01-01T00:00:00Z"),
+	}
+	sortByOrderDate(devices)
+
+	var got []string
+	for _, d := range devices {
+		got = append(got, d.ID)
+	}
+	want := []string{"OLD", "TIE-A", "TIE-B", "NEW", "NODATE"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
 	}
 }

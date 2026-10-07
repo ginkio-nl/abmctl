@@ -48,6 +48,7 @@ func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
 	if err != nil {
 		return err
 	}
+	sortByOrderDate(resources)
 	if !c.enabled() {
 		return printResources(g.Output, resources, deviceColumns)
 	}
@@ -107,6 +108,30 @@ func (d *duration) UnmarshalText(text []byte) error {
 	}
 	*d = duration(v)
 	return nil
+}
+
+// sortByOrderDate sorts devices oldest order first, with devices that have
+// no (parseable) order date last. Ties fall back to serial number so the
+// order is stable between runs. The API has no sort parameter, so this
+// only orders what was fetched -- without --all, just the first page.
+func sortByOrderDate(devices []apiclient.Resource) {
+	ordered := func(d apiclient.Resource) (time.Time, bool) {
+		t, err := time.Parse(time.RFC3339, d.Str("orderDateTime"))
+		return t, err == nil
+	}
+	slices.SortStableFunc(devices, func(a, b apiclient.Resource) int {
+		ta, okA := ordered(a)
+		tb, okB := ordered(b)
+		switch {
+		case okA && !okB:
+			return -1
+		case !okA && okB:
+			return 1
+		case okA && okB && !ta.Equal(tb):
+			return ta.Compare(tb)
+		}
+		return strings.Compare(a.Str("serialNumber"), b.Str("serialNumber"))
+	})
 }
 
 // listServerDevices returns the full device resources assigned to an MDM

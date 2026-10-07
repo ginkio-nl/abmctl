@@ -127,6 +127,11 @@ placed) and `ADDED` (`addedToOrgDateTime`, when the device joined your
 organization) as separate columns; a missing value shows as `-` in the table and an empty
 cell in CSV.
 
+`devices list` is sorted by `ORDERED`, oldest first, with devices that have
+no order date last -- in every output format. The API can't sort, so
+`abmctl` sorts what it fetched: without `--all` that's only the first page,
+not the oldest devices overall.
+
 `--coverage` adds AppleCare/warranty coverage (including Apple's Limited
 Warranty) as `COVERAGE`, `COVERAGE STATUS`, and `COVERAGE END` columns. A
 device can have several coverage records; the table shows an active one
