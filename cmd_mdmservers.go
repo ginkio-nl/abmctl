@@ -16,7 +16,7 @@ var mdmServerColumns = []column{
 	idColumn,
 	{header: "NAME", keys: []string{"serverName", "name"}},
 	{header: "TYPE", keys: []string{"serverType", "type"}},
-	{header: "UPDATED", keys: []string{"updatedDateTime", "updatedAt"}},
+	{header: "UPDATED", keys: []string{"updatedDateTime", "updatedAt"}, date: true},
 }
 
 // MDMServersListCmd lists all MDM servers.

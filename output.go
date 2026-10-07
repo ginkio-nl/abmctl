@@ -7,17 +7,20 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"abmctl/internal/apiclient"
 )
 
 // column describes one table column: a header and the resource attribute
 // key(s) to pull the value from (first match wins), or a value func for
-// columns that aren't a plain attribute.
+// columns that aren't a plain attribute. date trims an ISO 8601 timestamp
+// to its date.
 type column struct {
 	header string
 	keys   []string
 	value  func(r apiclient.Resource) string
+	date   bool
 }
 
 // idColumn shows a resource's ID. Column sets include it explicitly, so
@@ -26,10 +29,28 @@ type column struct {
 var idColumn = column{header: "ID", value: func(r apiclient.Resource) string { return r.ID }}
 
 func (c column) get(r apiclient.Resource) string {
+	var v string
 	if c.value != nil {
-		return c.value(r)
+		v = c.value(r)
+	} else {
+		v = r.FirstStr(c.keys...)
 	}
-	return r.FirstStr(c.keys...)
+	if c.date {
+		v = dateOnly(v)
+	}
+	return v
+}
+
+// dateOnly formats an ISO 8601 timestamp as its UTC date (2006-01-02).
+// Apple's timestamps are UTC, and some (like coverage end dates) are
+// date-only values sent as midnight UTC, so converting to local time could
+// shift them a day. Anything unparseable is returned as-is.
+func dateOnly(s string) string {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return t.UTC().Format(time.DateOnly)
 }
 
 // printResources renders resources as pretty-printed JSON (the full,

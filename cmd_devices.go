@@ -25,8 +25,8 @@ var deviceColumns = []column{
 	{header: "SERIAL", keys: []string{"serialNumber"}},
 	{header: "MODEL", keys: []string{"deviceModel", "model"}},
 	{header: "STATUS", keys: []string{"status", "orderStatus"}},
-	{header: "ORDERED", keys: []string{"orderDateTime"}},
-	{header: "ADDED", keys: []string{"addedToOrgDateTime"}},
+	{header: "ORDERED", keys: []string{"orderDateTime"}, date: true},
+	{header: "ADDED", keys: []string{"addedToOrgDateTime"}, date: true},
 }
 
 // DevicesListCmd lists devices, optionally scoped to one MDM server.
@@ -258,7 +258,7 @@ func coverageColumns(coverage map[string][]apiclient.Resource) []column {
 	return []column{
 		{header: "COVERAGE", value: attr("description")},
 		{header: "COVERAGE STATUS", value: attr("status")},
-		{header: "COVERAGE END", value: attr("endDateTime")},
+		{header: "COVERAGE END", value: attr("endDateTime"), date: true},
 	}
 }
 
