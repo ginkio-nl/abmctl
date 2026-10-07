@@ -325,3 +325,7 @@ Because the CLI is Kong-driven, adding a new resource (say, a hypothetical
 `--help` at every level, env-var binding, and flag validation all come for
 free from the struct tags -- there's no usage string or switch statement to
 remember to update.
+
+## License
+
+MIT -- see [LICENSE](LICENSE).
