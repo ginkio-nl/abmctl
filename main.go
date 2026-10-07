@@ -1,5 +1,5 @@
 // Command abmctl is a small, read-only CLI for the Apple Business Manager
-// API, currently covering MDM servers and organization devices.
+// API, covering MDM servers, organization devices, and users.
 //
 // Built on Kong (github.com/alecthomas/kong): the whole command tree is
 // described by the CLI struct below via struct tags, so adding a new
@@ -11,13 +11,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/alecthomas/kong"
 
-	"abmctl/internal/apiclient"
-	"abmctl/internal/auth"
-	"abmctl/internal/config"
+	"github.com/bart-lute/abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/auth"
+	"github.com/bart-lute/abmctl/internal/config"
 )
 
 // Globals holds the flags/env vars shared by every subcommand: ABM
@@ -49,11 +50,31 @@ type Globals struct {
 type CLI struct {
 	Globals
 
+	Version kong.VersionFlag `name:"version" help:"Print the abmctl version and exit."`
+
 	Auth       AuthCmd       `cmd:"" name:"auth" help:"Authentication utilities."`
 	Accounts   AccountsCmd   `cmd:"" name:"accounts" help:"Inspect the config file's accounts."`
 	MDMServers MDMServersCmd `cmd:"" name:"mdm-servers" help:"List and inspect MDM servers."`
 	Devices    DevicesCmd    `cmd:"" name:"devices" help:"List and inspect organization devices."`
 	Users      UsersCmd      `cmd:"" name:"users" help:"List and inspect organization users."`
+}
+
+// version is set at build time by the Makefile (-ldflags "-X
+// main.version=..."); see buildVersion for builds without it.
+var version = ""
+
+// buildVersion returns the version to report: the ldflags value if set,
+// else the module version Go records in the binary (the tag for
+// `go install ...@vX.Y.Z`, a pseudo-version for a build from a git
+// checkout), else "dev".
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
 }
 
 func main() {
@@ -63,6 +84,7 @@ func main() {
 		kong.Description("A CLI for the Apple Business Manager API (read-only)."),
 		kong.UsageOnError(),
 		kong.Vars{
+			"version":         buildVersion(),
 			"defaultBaseURL":  apiclient.DefaultBaseURL,
 			"defaultTokenURL": auth.DefaultTokenURL,
 			"defaultAudience": auth.DefaultAudience,

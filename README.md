@@ -10,7 +10,7 @@ means adding a field and a `Run` method there -- not hand-editing a usage
 string or a switch statement.
 
 ```bash
-go build -o abmctl .
+go install github.com/bart-lute/abmctl@latest
 ```
 
 ## 1. Create an API account in Apple Business Manager
@@ -75,16 +75,21 @@ Flags and env vars always take priority over the config file, so you can
 still override a single value (e.g. `--client-id`) on the command line even
 when a config file is in use.
 
-## 4. Build and try it
+## 4. Install and try it
 
 ```bash
-go build -o abmctl .
-./abmctl auth test
+go install github.com/bart-lute/abmctl@latest
+abmctl auth test
 ```
 
-Or with the included `Makefile`: `make build` (`./abmctl`), `make run`, `make test`,
-and `make install` (runs `go install .`, placing `abmctl` in `$(go env GOBIN)`
-or `$(go env GOPATH)/bin` -- make sure that directory is on your `PATH`).
+`go install` places `abmctl` in `$(go env GOBIN)` or `$(go env GOPATH)/bin`
+-- make sure that directory is on your `PATH`. Pin a release with
+`@v0.1.0` instead of `@latest`.
+
+From a checkout, use the included `Makefile`: `make build` (`./abmctl`),
+`make run`, `make test`, and `make install`. These stamp the output of
+`git describe` into the binary, so `abmctl --version` shows exactly which
+commit you're running.
 
 `auth test` runs the full flow (builds a signed JWT client assertion,
 exchanges it for a bearer access token) without touching any business
@@ -113,7 +118,7 @@ Global flags (valid on every command): `--client-id`, `--team-id`,
 `--key-id`, `--private-key`, `--config`, `--account` (see below),
 `--output table|json|csv` (default `table`), `--debug` (prints
 request/response trace to stderr, never the key or full token),
-`--no-token-cache` (see below).
+`--no-token-cache` (see below), and `--version`.
 
 `list` commands always return every result. The API pages its responses
 (100 per page by default); `abmctl` asks for its maximum of 1000 per page

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/apiclient"
 )
 
 // MDMServersCmd groups MDM server commands.

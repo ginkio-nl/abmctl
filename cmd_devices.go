@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"abmctl/internal/apiclient"
-	"abmctl/internal/coveragecache"
+	"github.com/bart-lute/abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/coveragecache"
 )
 
 // DevicesCmd groups organization device commands.

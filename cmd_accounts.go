@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"abmctl/internal/apiclient"
-	"abmctl/internal/config"
+	"github.com/bart-lute/abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/config"
 )
 
 // AccountsCmd groups config-file account management commands.

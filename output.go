@@ -9,7 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/apiclient"
 )
 
 // column describes one table column: a header and the resource attribute

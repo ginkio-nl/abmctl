@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"abmctl/internal/config"
+	"github.com/bart-lute/abmctl/internal/config"
 )
 
 // cachedToken is the on-disk shape of a cached access token. Only one

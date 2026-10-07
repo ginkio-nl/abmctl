@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"abmctl/internal/apiclient"
+	"github.com/bart-lute/abmctl/internal/apiclient"
 )
 
 // UsersCmd groups organization user commands.
