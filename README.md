@@ -1,7 +1,7 @@
 # abmctl
 
 A small, read-only CLI for the Apple Business Manager (ABM) API. Currently
-covers MDM servers and organization devices.
+covers MDM servers, organization devices, and organization users.
 
 Commands are built on [Kong](https://github.com/alecthomas/kong): the whole
 command tree, flags, env-var bindings, and `--help` text are all generated
@@ -10,8 +10,6 @@ means adding a field and a `Run` method there -- not hand-editing a usage
 string or a switch statement.
 
 ```bash
-go get github.com/alecthomas/kong@latest
-go mod tidy
 go build -o abmctl .
 ```
 
@@ -80,8 +78,6 @@ when a config file is in use.
 ## 4. Build and try it
 
 ```bash
-go get github.com/alecthomas/kong@latest  # only needed once
-go mod tidy
 go build -o abmctl .
 ./abmctl auth test
 ```
@@ -257,14 +253,16 @@ internal/config/            multi-account config file
 
 ### Adding a new subcommand
 
-Because the CLI is Kong-driven, adding e.g. `abmctl users list` doesn't touch
-`main.go`'s command tree logic at all:
+Because the CLI is Kong-driven, adding a new resource (say, a hypothetical
+`abmctl widgets list`) doesn't touch `main.go`'s command tree logic at all.
+`cmd_users.go` is a compact template to copy:
 
-1. Add a `Users UsersCmd `cmd:"" name:"users" help:"..."`` field to the `CLI`
-   struct in `main.go`.
-2. Add a new `cmd_users.go` with a `UsersCmd` struct (nesting `List`/`Get`
-   the same way `DevicesCmd` does) and a `Run(g *Globals, client
-   *apiclient.Client) error` method on each leaf command.
+1. Add a ``Widgets WidgetsCmd `cmd:"" name:"widgets" help:"..."` `` field to
+   the `CLI` struct in `main.go`.
+2. Add a new `cmd_widgets.go` with a `WidgetsCmd` struct (nesting
+   `List`/`Get` the same way `UsersCmd` does), a `[]column` slice for the
+   table/CSV view, and a `Run(g *Globals, client *apiclient.Client) error`
+   method on each leaf command.
 
 `--help` at every level, env-var binding, and flag validation all come for
 free from the struct tags -- there's no usage string or switch statement to
