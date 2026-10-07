@@ -118,6 +118,15 @@ request/response trace to stderr, never the key or full token),
 `--all` follows pagination (`links.next`) and fetches every page; without
 it you get just the first page, which is faster for a quick look.
 
+`devices list --mdm-server-id` is slower than a plain `devices list`: the
+API only returns the IDs of a server's devices, so `abmctl` fetches each
+device's details with a separate request.
+
+The devices table shows `ORDERED` (`orderDateTime`, when the order was
+placed) and `ADDED` (`addedToOrgDateTime`, when the device joined your
+organization) as separate columns; a missing value shows as `-` in the table and an empty
+cell in CSV.
+
 `--output json` prints the full, untouched API response for each resource --
 useful both for scripting and for seeing fields the table view doesn't show.
 
