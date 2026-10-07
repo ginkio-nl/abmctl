@@ -9,6 +9,10 @@ from struct tags on `Globals`/`CLI` in `main.go`, so adding a subcommand
 means adding a field and a `Run` method there -- not hand-editing a usage
 string or a switch statement.
 
+Prebuilt binaries for macOS, Linux, and Windows are on the
+[releases page](https://github.com/ginkio-nl/abmctl/releases); see
+[Install and try it](#4-install-and-try-it) for details, or with Go:
+
 ```bash
 go install github.com/ginkio-nl/abmctl@latest
 ```
@@ -77,6 +81,41 @@ when a config file is in use.
 
 ## 4. Install and try it
 
+**Download a binary** from the
+[releases page](https://github.com/ginkio-nl/abmctl/releases). Each release
+has one file per platform, named `abmctl_<version>_<os>_<arch>`:
+
+| Platform                        | File                                 |
+| ------------------------------- | ------------------------------------ |
+| macOS (Apple silicon and Intel) | `abmctl_<version>_darwin_universal`  |
+| Linux x86-64                    | `abmctl_<version>_linux_amd64`       |
+| Linux ARM64                     | `abmctl_<version>_linux_arm64`       |
+| Windows x86-64                  | `abmctl_<version>_windows_amd64.exe` |
+
+On macOS or Linux, for example:
+
+```bash
+VERSION=0.1.2
+FILE=abmctl_${VERSION}_darwin_universal   # or abmctl_${VERSION}_linux_amd64, ...
+BASE=https://github.com/ginkio-nl/abmctl/releases/download/v${VERSION}
+
+curl -fLO "$BASE/$FILE" -O "$BASE/checksums.txt"
+shasum -a 256 -c --ignore-missing checksums.txt
+chmod +x "$FILE"
+sudo mv "$FILE" /usr/local/bin/abmctl
+abmctl auth test
+```
+
+The macOS binary is not notarized. Downloading with `curl` as above avoids
+Gatekeeper; if you downloaded it with a browser instead and macOS refuses to
+open it, clear the quarantine flag with
+`xattr -d com.apple.quarantine abmctl`.
+
+On Windows, download `abmctl_<version>_windows_amd64.exe`, rename it to
+`abmctl.exe`, and put it in a folder on your `PATH`.
+
+**Or install with Go** (1.24 or later):
+
 ```bash
 go install github.com/ginkio-nl/abmctl@latest
 abmctl auth test
@@ -84,7 +123,7 @@ abmctl auth test
 
 `go install` places `abmctl` in `$(go env GOBIN)` or `$(go env GOPATH)/bin`
 -- make sure that directory is on your `PATH`. Pin a release with
-`@v0.1.0` instead of `@latest`.
+`@v0.1.2` instead of `@latest`.
 
 From a checkout, use the included `Makefile`: `make build` (`./abmctl`),
 `make run`, `make test`, and `make install`. These stamp the output of
