@@ -39,7 +39,7 @@ type Globals struct {
 	Audience string `name:"token-audience" env:"ABM_TOKEN_AUDIENCE" default:"${defaultAudience}" hidden:"" help:"Client assertion 'aud' claim."`
 	Scope    string `name:"scope" env:"ABM_SCOPE" default:"${defaultScope}" hidden:"" help:"OAuth2 scope requested."`
 
-	Output       string `name:"output" short:"o" enum:"table,json,csv" default:"table" help:"Output format: table, json, or csv."`
+	Output       string `name:"output" short:"o" enum:"table,json,csv,xlsx" default:"table" help:"Output format: table, json, csv, or xlsx (redirect to a file)."`
 	Debug        bool   `name:"debug" help:"Print request/response trace to stderr for troubleshooting auth and API calls."`
 	NoTokenCache bool   `name:"no-token-cache" help:"Always fetch a fresh access token instead of reusing one cached on disk from a previous run."`
 }

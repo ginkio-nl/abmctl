@@ -155,7 +155,7 @@ abmctl users get <id>
 
 Global flags (valid on every command): `--client-id`, `--team-id`,
 `--key-id`, `--private-key`, `--config`, `--account` (see below),
-`--output table|json|csv` (default `table`), `--debug` (prints
+`--output table|json|csv|xlsx` (default `table`), `--debug` (prints
 request/response trace to stderr, never the key or full token),
 `--no-token-cache` (see below), and `--version`.
 
@@ -172,7 +172,7 @@ device's details with a separate request.
 The devices table shows `ORDERED` (`orderDateTime`, when the order was
 placed) and `ADDED` (`addedToOrgDateTime`, when the device joined your
 organization) as separate columns; a missing value shows as `-` in the table and an empty
-cell in CSV.
+cell in CSV and xlsx.
 
 `devices list` is sorted by `ORDERED`, oldest first, with devices that have
 no order date last -- in every output format. The API can't sort, so
@@ -200,6 +200,19 @@ useful both for scripting and for seeing fields the table view doesn't show.
 comma-separated values suitable for piping into a
 spreadsheet or another tool. Unlike the table view, missing fields are
 written as empty cells rather than `-`.
+
+`--output xlsx` writes the same columns as an Excel workbook, ready to open
+in Excel, Numbers, or Google Sheets. It's a binary file, so redirect it
+(`abmctl` refuses to write it to a terminal):
+
+```bash
+abmctl devices list --coverage -o xlsx > devices.xlsx
+```
+
+The header row is bold, frozen, and has a filter on every column. Date
+columns (`ORDERED`, `ADDED`, `COVERAGE END`, ...) are real dates, so they
+sort and filter as dates; every other value is plain text, so serial numbers
+and IDs keep their leading zeros and nothing is ever treated as a formula.
 
 Device output has no separate `ID` column: a device's ID is its serial
 number, so `SERIAL` is what you pass to `devices get`. Other resources

@@ -54,14 +54,16 @@ func dateOnly(s string) string {
 }
 
 // printResources renders resources as pretty-printed JSON (the full,
-// authoritative payload), CSV, or a best-effort table using the given
-// columns, depending on output.
+// authoritative payload), CSV, an Excel workbook, or a best-effort table
+// using the given columns, depending on output.
 func printResources(output string, resources []apiclient.Resource, cols []column) error {
 	switch output {
 	case "json":
 		return printJSON(resources)
 	case "csv":
 		return printCSV(resources, cols)
+	case "xlsx":
+		return printXLSX(resources, cols)
 	default:
 		return printTable(resources, cols)
 	}
@@ -73,6 +75,8 @@ func printResource(output string, resource apiclient.Resource, cols []column) er
 		return printJSON(resource)
 	case "csv":
 		return printCSV([]apiclient.Resource{resource}, cols)
+	case "xlsx":
+		return printXLSX([]apiclient.Resource{resource}, cols)
 	default:
 		return printTable([]apiclient.Resource{resource}, cols)
 	}
