@@ -41,6 +41,20 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "abmctl", "config.json"), nil
 }
 
+// FilenameSafe keeps a Client ID readable in a filename (useful when
+// debugging with --debug) while guaranteeing it's filesystem-safe. Used to
+// name the per-account cache files next to the config file.
+func FilenameSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, s)
+}
+
 // Load reads and parses the config file at path. A missing file is not an
 // error: it returns (nil, nil) so callers can fall back to flags/env vars.
 func Load(path string) (*File, error) {

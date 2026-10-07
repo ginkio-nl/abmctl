@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"abmctl/internal/config"
 )
 
 // cachedToken is the on-disk shape of a cached access token. Only one
@@ -29,20 +30,7 @@ func DefaultCachePath(clientID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("auth: locating user config dir: %w", err)
 	}
-	return filepath.Join(dir, "abmctl", "token-"+sanitizeForFilename(clientID)+".json"), nil
-}
-
-// sanitizeForFilename keeps a Client ID readable in a filename (useful when
-// debugging with --debug) while guaranteeing it's filesystem-safe.
-func sanitizeForFilename(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
-			return r
-		default:
-			return '_'
-		}
-	}, s)
+	return filepath.Join(dir, "abmctl", "token-"+config.FilenameSafe(clientID)+".json"), nil
 }
 
 // loadCachedToken reads and validates the on-disk cache. It returns

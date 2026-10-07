@@ -102,8 +102,8 @@ abmctl accounts set-default <name>
 abmctl mdm-servers list [--all]
 abmctl mdm-servers get <id>
 
-abmctl devices list [--all] [--mdm-server-id ID] [--coverage]
-abmctl devices get <id> [--coverage]
+abmctl devices list [--all] [--mdm-server-id ID] [--coverage] [--refresh-coverage] [--coverage-max-age 7d]
+abmctl devices get <id> [--coverage] [--refresh-coverage] [--coverage-max-age 7d]
 
 abmctl users list [--all]
 abmctl users get <id>
@@ -135,7 +135,8 @@ every record under a `coverage` field on each device. It's off by default
 because it costs one extra request per device -- about a second each -- and
 the requests run one at a time, since Apple's rate limit is low enough that
 parallel requests mostly get rejected. A progress counter is shown on
-stderr while it runs.
+stderr while it runs. Coverage is cached between runs (see
+[Coverage caching](#coverage-caching)), so only the first run is slow.
 
 Requests rejected by Apple's rate limit (HTTP 429) are retried
 automatically, waiting 2s and doubling up to 60s between attempts, so a
@@ -227,6 +228,26 @@ Caching is best-effort: if the cache can't be read or written for any
 reason (permissions, no config dir, ...), `abmctl` just falls back to
 authenticating fresh rather than failing the command.
 
+## Coverage caching
+
+Coverage rarely changes, so `--coverage` caches each device's records at
+`<user config dir>/abmctl/coverage-<client id>.json`, one file per Client
+ID like the token cache. A device's cached coverage is reused until:
+
+- it's older than `--coverage-max-age` (default `7d`; accepts days like
+  `30d` or Go durations like `12h`),
+- it's older than 1 day and the device had no coverage records (new
+  devices can pick up their warranty a little after purchase), or
+- one of its records has passed its end date since it was cached, so a
+  cached `ACTIVE` is never shown after the coverage actually ends.
+
+Only devices that aren't fresh in the cache are fetched, so a warm run is
+about as fast as a plain `devices list`. `--refresh-coverage` ignores the
+cache, fetches everything again, and updates the cache. A run that fails
+partway (e.g. on a network error) still saves what it fetched, so the
+next run picks up where it left off. Like the token cache it's
+best-effort: if it can't be read or written, `abmctl` just fetches live.
+
 ## How authentication works
 
 Apple's Business Manager API uses OAuth2 `client_credentials` with a JWT
@@ -272,6 +293,7 @@ output.go                   table/JSON/CSV rendering
 internal/auth/              JWT client assertion + OAuth2 token exchange
 internal/apiclient/         HTTP client, pagination, generic resource type
 internal/config/            multi-account config file
+internal/coveragecache/     on-disk AppleCare coverage cache
 ```
 
 ### Adding a new subcommand

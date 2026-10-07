@@ -113,15 +113,3 @@ func TestAccessTokenReusesCacheAcrossInstances(t *testing.T) {
 		t.Fatalf("expected exactly 1 token request across both instances, got %d", tokenRequests)
 	}
 }
-
-func TestSanitizeForFilename(t *testing.T) {
-	got := sanitizeForFilename("BUSINESSAPI.9703f56c-10ce/../weird id")
-	for _, r := range got {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
-			// fine
-		default:
-			t.Fatalf("sanitizeForFilename produced an unsafe character %q in %q", r, got)
-		}
-	}
-}

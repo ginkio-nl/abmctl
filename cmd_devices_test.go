@@ -4,9 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"abmctl/internal/apiclient"
+	"abmctl/internal/coveragecache"
 )
 
 type staticTokens struct{}
@@ -79,7 +82,7 @@ func TestFetchCoverageTreatsNotFoundAsNoCoverage(t *testing.T) {
 
 	client := apiclient.New(srv.URL, staticTokens{}, srv.Client())
 	devices := []apiclient.Resource{{ID: "A"}, {ID: "B"}}
-	coverage, err := fetchCoverage(context.Background(), client, devices)
+	coverage, err := fetchCoverage(context.Background(), client, devices, nil, false)
 	if err != nil {
 		t.Fatalf("fetchCoverage: %v", err)
 	}
@@ -91,5 +94,56 @@ func TestFetchCoverageTreatsNotFoundAsNoCoverage(t *testing.T) {
 	}
 	if got := withCoverage(devices, coverage)[1].Coverage; got == nil {
 		t.Error("withCoverage left a nil slice; JSON should show [] not null")
+	}
+}
+
+func TestFetchCoverageUsesCacheUnlessRefreshing(t *testing.T) {
+	requests := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests[r.URL.Path]++
+		_, _ = w.Write([]byte(`{"data":[{"type":"appleCareCoverage","id":"c1","attributes":{"description":"fresh"}}],"links":{}}`))
+	}))
+	defer srv.Close()
+
+	client := apiclient.New(srv.URL, staticTokens{}, srv.Client())
+	cache := coveragecache.Load(filepath.Join(t.TempDir(), "coverage.json"), "client", nil)
+	cache.Put("A", []apiclient.Resource{{ID: "c0", Attributes: map[string]any{"description": "cached"}}})
+	devices := []apiclient.Resource{{ID: "A"}, {ID: "B"}}
+
+	coverage, err := fetchCoverage(context.Background(), client, devices, cache, false)
+	if err != nil {
+		t.Fatalf("fetchCoverage: %v", err)
+	}
+	if got := coverage["A"][0].Str("description"); got != "cached" {
+		t.Errorf("A description = %q, want cached", got)
+	}
+	if requests["/orgDevices/A/appleCareCoverage"] != 0 || requests["/orgDevices/B/appleCareCoverage"] != 1 {
+		t.Errorf("requests = %v, want only B fetched", requests)
+	}
+	if _, ok := cache.Get("B"); !ok {
+		t.Error("B's fetched coverage should have been cached")
+	}
+
+	coverage, err = fetchCoverage(context.Background(), client, devices, cache, true)
+	if err != nil {
+		t.Fatalf("fetchCoverage (refresh): %v", err)
+	}
+	if got := coverage["A"][0].Str("description"); got != "fresh" {
+		t.Errorf("after refresh, A description = %q, want fresh", got)
+	}
+}
+
+func TestDurationAcceptsDaysAndGoDurations(t *testing.T) {
+	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "0d": 0, "12h": 12 * time.Hour, "90m": 90 * time.Minute} {
+		var d duration
+		if err := d.UnmarshalText([]byte(in)); err != nil || time.Duration(d) != want {
+			t.Errorf("%q -> %v, %v; want %v", in, time.Duration(d), err, want)
+		}
+	}
+	for _, in := range []string{"", "d", "1.5d", "-1d", "-2h", "week"} {
+		var d duration
+		if err := d.UnmarshalText([]byte(in)); err == nil {
+			t.Errorf("%q: expected an error", in)
+		}
 	}
 }

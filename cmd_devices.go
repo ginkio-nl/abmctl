@@ -7,8 +7,12 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
+	"time"
 
 	"abmctl/internal/apiclient"
+	"abmctl/internal/coveragecache"
 )
 
 // DevicesCmd groups organization device commands.
@@ -29,7 +33,7 @@ var deviceColumns = []column{
 type DevicesListCmd struct {
 	All         bool   `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
 	MDMServerID string `name:"mdm-server-id" help:"List only devices assigned to this MDM server (fetches each device individually, so it's slower for large servers)."`
-	Coverage    bool   `name:"coverage" help:"Also fetch AppleCare/warranty coverage (one extra request per device, so roughly 1s per device)."`
+	CoverageFlags
 }
 
 func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
@@ -44,10 +48,10 @@ func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
 	if err != nil {
 		return err
 	}
-	if !c.Coverage {
+	if !c.enabled() {
 		return printResources(g.Output, resources, deviceColumns)
 	}
-	coverage, err := fetchCoverage(ctx, client, resources)
+	coverage, err := c.fetch(ctx, g, client, resources)
 	if err != nil {
 		return err
 	}
@@ -55,6 +59,54 @@ func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
 		return printJSON(withCoverage(resources, coverage))
 	}
 	return printResources(g.Output, resources, slices.Concat(deviceColumns, coverageColumns(coverage)))
+}
+
+// CoverageFlags are the AppleCare/warranty coverage options shared by
+// `devices list` and `devices get`.
+type CoverageFlags struct {
+	Coverage        bool     `name:"coverage" help:"Also show AppleCare/warranty coverage. Uncached devices cost one extra request each (roughly 1s per device)."`
+	RefreshCoverage bool     `name:"refresh-coverage" help:"Ignore cached coverage and fetch it fresh (implies --coverage)."`
+	CoverageMaxAge  duration `name:"coverage-max-age" default:"7d" help:"Reuse cached coverage fetched within this long, e.g. 12h, 7d, 30d. Devices without coverage are re-checked after at most 1d."`
+}
+
+func (f CoverageFlags) enabled() bool { return f.Coverage || f.RefreshCoverage }
+
+// fetch returns coverage for devices, served from the on-disk cache where
+// it's fresh enough and fetched (then cached) otherwise.
+func (f CoverageFlags) fetch(ctx context.Context, g *Globals, client *apiclient.Client, devices []apiclient.Resource) (map[string][]apiclient.Resource, error) {
+	var debug func(string)
+	if g.Debug {
+		debug = func(line string) { fmt.Fprintln(os.Stderr, "[coverage]", line) }
+	}
+	var cache *coveragecache.Cache
+	if path, err := coveragecache.DefaultPath(g.ClientID); err == nil {
+		cache = coveragecache.Load(path, g.ClientID, debug)
+		cache.MaxAge = time.Duration(f.CoverageMaxAge)
+		defer cache.Save() // also after an error, so a long run that fails partway keeps its progress
+	}
+	return fetchCoverage(ctx, client, devices, cache, f.RefreshCoverage)
+}
+
+// duration is a time.Duration flag that also accepts whole days ("7d"),
+// since coverage cache ages are naturally measured in days.
+type duration time.Duration
+
+func (d *duration) UnmarshalText(text []byte) error {
+	s := string(text)
+	if days, ok := strings.CutSuffix(s, "d"); ok {
+		n, err := strconv.Atoi(days)
+		if err != nil || n < 0 {
+			return fmt.Errorf("invalid duration %q: want e.g. 12h, 7d, 30d", s)
+		}
+		*d = duration(time.Duration(n) * 24 * time.Hour)
+		return nil
+	}
+	v, err := time.ParseDuration(s)
+	if err != nil || v < 0 {
+		return fmt.Errorf("invalid duration %q: want e.g. 12h, 7d, 30d", s)
+	}
+	*d = duration(v)
+	return nil
 }
 
 // listServerDevices returns the full device resources assigned to an MDM
@@ -79,8 +131,8 @@ func listServerDevices(ctx context.Context, client *apiclient.Client, serverID s
 
 // DevicesGetCmd fetches one device by ID.
 type DevicesGetCmd struct {
-	ID       string `arg:"" name:"id" help:"Device ID."`
-	Coverage bool   `name:"coverage" help:"Also fetch AppleCare/warranty coverage."`
+	ID string `arg:"" name:"id" help:"Device ID."`
+	CoverageFlags
 }
 
 func (c *DevicesGetCmd) Run(g *Globals, client *apiclient.Client) error {
@@ -89,10 +141,10 @@ func (c *DevicesGetCmd) Run(g *Globals, client *apiclient.Client) error {
 	if err != nil {
 		return err
 	}
-	if !c.Coverage {
+	if !c.enabled() {
 		return printResource(g.Output, resource, deviceColumns)
 	}
-	coverage, err := fetchCoverage(ctx, client, []apiclient.Resource{resource})
+	coverage, err := c.fetch(ctx, g, client, []apiclient.Resource{resource})
 	if err != nil {
 		return err
 	}
@@ -103,15 +155,28 @@ func (c *DevicesGetCmd) Run(g *Globals, client *apiclient.Client) error {
 }
 
 // fetchCoverage returns each device's AppleCare/warranty coverage records,
-// keyed by device ID. Requests run one at a time: Apple's rate limit is low
-// enough that parallel requests mostly earn 429s. Progress is shown on
-// stderr when it's a terminal and there's more than one device.
-func fetchCoverage(ctx context.Context, client *apiclient.Client, devices []apiclient.Resource) (map[string][]apiclient.Resource, error) {
-	showProgress := len(devices) > 1 && isTerminal(os.Stderr)
+// keyed by device ID. Fresh entries in cache (which may be nil) are used
+// as-is unless refresh is set; everything else is fetched and cached.
+// Requests run one at a time: Apple's rate limit is low enough that
+// parallel requests mostly earn 429s. Progress is shown on stderr when it's
+// a terminal and more than one device needs fetching.
+func fetchCoverage(ctx context.Context, client *apiclient.Client, devices []apiclient.Resource, cache *coveragecache.Cache, refresh bool) (map[string][]apiclient.Resource, error) {
 	coverage := make(map[string][]apiclient.Resource, len(devices))
-	for i, d := range devices {
+	var todo []apiclient.Resource
+	for _, d := range devices {
+		if cache != nil && !refresh {
+			if records, ok := cache.Get(d.ID); ok {
+				coverage[d.ID] = records
+				continue
+			}
+		}
+		todo = append(todo, d)
+	}
+
+	showProgress := len(todo) > 1 && isTerminal(os.Stderr)
+	for i, d := range todo {
 		if showProgress {
-			fmt.Fprintf(os.Stderr, "\rFetching coverage %d/%d", i+1, len(devices))
+			fmt.Fprintf(os.Stderr, "\rFetching coverage %d/%d (%d cached)", i+1, len(todo), len(devices)-len(todo))
 		}
 		records, err := client.GetList(ctx, "/orgDevices/"+d.ID+"/appleCareCoverage", nil, true)
 		var apiErr *apiclient.APIError
@@ -125,6 +190,9 @@ func fetchCoverage(ctx context.Context, client *apiclient.Client, devices []apic
 			return nil, fmt.Errorf("fetching coverage for device %s: %w", d.ID, err)
 		}
 		coverage[d.ID] = records
+		if cache != nil {
+			cache.Put(d.ID, records)
+		}
 	}
 	if showProgress {
 		fmt.Fprint(os.Stderr, "\r\033[K")
