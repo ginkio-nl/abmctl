@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -39,6 +40,58 @@ func DefaultPath() (string, error) {
 		return "", fmt.Errorf("config: locating user config dir: %w", err)
 	}
 	return filepath.Join(dir, "abmctl", "config.json"), nil
+}
+
+// SystemPath returns the machine-wide config file location, for a config
+// deployed by an administrator or MDM rather than by each user:
+// /Library/Application Support/abmctl/config.json on macOS,
+// %ProgramData%\abmctl\config.json on Windows, and /etc/abmctl/config.json
+// everywhere else.
+func SystemPath() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "/Library/Application Support/abmctl/config.json"
+	case "windows":
+		dir := os.Getenv("ProgramData")
+		if dir == "" {
+			dir = `C:\ProgramData`
+		}
+		return filepath.Join(dir, "abmctl", "config.json")
+	default:
+		return "/etc/abmctl/config.json"
+	}
+}
+
+// DefaultPaths returns every location abmctl checks for a config file when
+// --config isn't given, in priority order: the per-user DefaultPath first
+// (so a user's own config always wins), then the machine-wide SystemPath.
+func DefaultPaths() []string {
+	var paths []string
+	if p, err := DefaultPath(); err == nil {
+		paths = append(paths, p)
+	}
+	return append(paths, SystemPath())
+}
+
+// FindDefault returns the first of DefaultPaths that exists and is
+// readable, or "" if none is. An unreadable file is skipped rather than
+// reported, so a system-wide config restricted to e.g. the admin group
+// doesn't break abmctl for other users who pass credentials via flags or
+// env vars instead.
+func FindDefault() string {
+	return firstReadable(DefaultPaths())
+}
+
+func firstReadable(paths []string) string {
+	for _, p := range paths {
+		f, err := os.Open(p)
+		if err != nil {
+			continue
+		}
+		f.Close()
+		return p
+	}
+	return ""
 }
 
 // FilenameSafe keeps a Client ID readable in a filename (useful when

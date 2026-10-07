@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -261,5 +263,67 @@ func TestFilenameSafe(t *testing.T) {
 		default:
 			t.Fatalf("FilenameSafe produced an unsafe character %q in %q", r, got)
 		}
+	}
+}
+
+func TestFirstReadablePrefersEarlierPaths(t *testing.T) {
+	user := writeTestConfig(t, `{"accounts": {"a": {}}}`)
+	system := writeTestConfig(t, `{"accounts": {"b": {}}}`)
+
+	if got := firstReadable([]string{user, system}); got != user {
+		t.Fatalf("firstReadable = %q, want the user config %q", got, user)
+	}
+}
+
+func TestFirstReadableFallsBackToSystemPath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "config.json")
+	system := writeTestConfig(t, `{"accounts": {"b": {}}}`)
+
+	if got := firstReadable([]string{missing, system}); got != system {
+		t.Fatalf("firstReadable = %q, want the system config %q", got, system)
+	}
+}
+
+func TestFirstReadableSkipsUnreadableFiles(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read any file")
+	}
+	unreadable := writeTestConfig(t, `{"accounts": {"a": {}}}`)
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := firstReadable([]string{unreadable}); got != "" {
+		t.Fatalf("firstReadable = %q, want \"\" for an unreadable file", got)
+	}
+}
+
+func TestDefaultPathsEndWithSystemPath(t *testing.T) {
+	paths := DefaultPaths()
+	if len(paths) == 0 || paths[len(paths)-1] != SystemPath() {
+		t.Fatalf("DefaultPaths = %v, want it to end with SystemPath %q", paths, SystemPath())
+	}
+}
+
+func TestSaveToReadOnlyDirIsPermissionError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write to any directory")
+	}
+	path := writeTestConfig(t, `{"accounts": {"a": {}, "b": {}}}`)
+	f, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	dir := filepath.Dir(path)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	if err := f.SetDefault("b"); err != nil {
+		t.Fatalf("SetDefault: %v", err)
+	}
+	if err := f.Save(); !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("Save error = %v, want a permission error", err)
 	}
 }

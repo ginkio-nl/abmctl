@@ -228,12 +228,19 @@ instead of re-exporting `ABM_*` env vars every time you switch:
 }
 ```
 
-By default `abmctl` looks for this file at `<user config dir>/abmctl/config.json`
--- e.g. `~/Library/Application Support/abmctl/config.json` on macOS, or
-`~/.config/abmctl/config.json` on Linux -- and only uses it if it happens to
-exist; without one, `abmctl` behaves exactly as it did before, reading
+By default `abmctl` looks for this file in two places and uses the first one
+that exists and is readable:
+
+1. Per user: `<user config dir>/abmctl/config.json` -- e.g.
+   `~/Library/Application Support/abmctl/config.json` on macOS, or
+   `~/.config/abmctl/config.json` on Linux.
+2. System-wide: `/Library/Application Support/abmctl/config.json` on macOS,
+   `/etc/abmctl/config.json` on Linux, or
+   `%ProgramData%\abmctl\config.json` on Windows.
+
+Without either, `abmctl` behaves exactly as it did before, reading
 credentials from flags/env vars. Pass `--config <path>` (or `ABM_CONFIG`) to
-point at a file elsewhere instead; unlike the default path, an explicit
+point at a file elsewhere instead; unlike the default paths, an explicit
 `--config` must exist.
 
 A relative `private_key` path (as above) is resolved relative to the config
@@ -260,6 +267,30 @@ even in case 4 above, before you've decided which `--account` to use.
 before and take priority over the config file field by field -- e.g.
 `--client-id` alone overrides just the client ID from the selected account,
 leaving its key ID and private key from the config file untouched.
+
+### Deploying a system-wide config (MDM)
+
+The system-wide path is meant for a config deployed by an MDM such as
+Addigy, Jamf, or Intune, so it works for every user on the machine without
+looking up home directories. Put the config file and its keys together
+(using relative `private_key` paths) and restrict them to the people who
+should be able to use them -- for example, on macOS, only admins:
+
+```bash
+dir="/Library/Application Support/abmctl"
+install -d -m 750 -o root -g admin "$dir"
+install -m 640 -o root -g admin config.json *.pem "$dir/"
+```
+
+Users who can't read the system-wide config are unaffected: `abmctl` skips
+it and falls back to flags/env vars. A user's own config file always takes
+priority over the system-wide one. `accounts set-default` can't change a
+root-owned config, so select an account per run with `--account` or
+`ABM_ACCOUNT` instead.
+
+Every machine that receives the config holds a working ABM API key, with
+everything that key's role is allowed to do (not just what `abmctl` does),
+so deploy it only to the machines that need it.
 
 ## Access token caching
 

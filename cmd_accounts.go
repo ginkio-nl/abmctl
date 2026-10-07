@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"strings"
 
 	"github.com/ginkio-nl/abmctl/internal/apiclient"
 	"github.com/ginkio-nl/abmctl/internal/config"
@@ -13,18 +16,17 @@ type AccountsCmd struct {
 	SetDefault AccountsSetDefaultCmd `cmd:"" name:"set-default" help:"Set the config file's default account."`
 }
 
-// loadConfigFile resolves g.ConfigPath (or the default location) and loads
-// it, producing a clear error either way: an explicit --config must exist,
-// while the default path just means "no config file" if missing.
+// loadConfigFile resolves g.ConfigPath (or the default locations) and
+// loads it, producing a clear error either way: an explicit --config must
+// exist, while no file at any default location just means "no config file".
 func loadConfigFile(g *Globals) (*config.File, string, error) {
 	path := g.ConfigPath
 	explicit := path != ""
 	if !explicit {
-		p, err := config.DefaultPath()
-		if err != nil {
-			return nil, "", err
+		path = config.FindDefault()
+		if path == "" {
+			return nil, "", fmt.Errorf("no config file found at %s -- see --config, or use --client-id/--key-id/--private-key (or ABM_* env vars) instead", strings.Join(config.DefaultPaths(), " or "))
 		}
-		path = p
 	}
 
 	file, err := config.Load(path)
@@ -32,10 +34,7 @@ func loadConfigFile(g *Globals) (*config.File, string, error) {
 		return nil, "", err
 	}
 	if file == nil {
-		if explicit {
-			return nil, "", fmt.Errorf("config file not found: %s", path)
-		}
-		return nil, "", fmt.Errorf("no config file found at %s -- see --config, or use --client-id/--key-id/--private-key (or ABM_* env vars) instead", path)
+		return nil, "", fmt.Errorf("config file not found: %s", path)
 	}
 	return file, path, nil
 }
@@ -95,6 +94,11 @@ func (c *AccountsSetDefaultCmd) Run(g *Globals) error {
 		return err
 	}
 	if err := file.Save(); err != nil {
+		// Typically a system-wide config deployed read-only by an
+		// administrator or MDM: point at the per-run alternative.
+		if errors.Is(err, fs.ErrPermission) {
+			return fmt.Errorf("can't update %s: permission denied (it may be managed by an administrator); select an account per run with --account/ABM_ACCOUNT instead", path)
+		}
 		return err
 	}
 

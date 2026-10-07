@@ -31,7 +31,7 @@ type Globals struct {
 	KeyID          string `name:"key-id" env:"ABM_KEY_ID" help:"API key ID from Apple Business Manager. Falls back to the config file if unset (see --config)."`
 	PrivateKeyPath string `name:"private-key" env:"ABM_PRIVATE_KEY_PATH" type:"path" help:"Path to the unencrypted PKCS#8 EC (P-256) private key (.pem). Falls back to the config file if unset (see --config)."`
 
-	ConfigPath string `name:"config" env:"ABM_CONFIG" type:"path" help:"Path to a config file holding one or more named ABM accounts, used only when --client-id/--key-id/--private-key aren't otherwise given (default: <user config dir>/abmctl/config.json, if it exists)."`
+	ConfigPath string `name:"config" env:"ABM_CONFIG" type:"path" help:"Path to a config file holding one or more named ABM accounts, used only when --client-id/--key-id/--private-key aren't otherwise given (default: <user config dir>/abmctl/config.json, else a system-wide config such as /Library/Application Support/abmctl/config.json on macOS or /etc/abmctl/config.json on Linux, whichever exists first)."`
 	Account    string `name:"account" env:"ABM_ACCOUNT" help:"Which account to use from the config file (default: its default_account, or its only account if there's just one)."`
 
 	BaseURL  string `name:"base-url" env:"ABM_BASE_URL" default:"${defaultBaseURL}" hidden:"" help:"ABM API base URL."`
@@ -128,17 +128,17 @@ func main() {
 // env vars always win over the config file when both are given.
 //
 // --config points at an explicit file, which must exist; with no --config,
-// the default path is used only if it happens to exist, so abmctl without
-// a config file behaves exactly as before.
+// the per-user and then the system-wide default path are used only if one
+// happens to exist (see config.DefaultPaths), so abmctl without a config
+// file behaves exactly as before.
 func applyConfigAccount(g *Globals) error {
 	path := g.ConfigPath
 	explicit := path != ""
 	if !explicit {
-		p, err := config.DefaultPath()
-		if err != nil {
+		path = config.FindDefault()
+		if path == "" {
 			return nil
 		}
-		path = p
 	}
 
 	file, err := config.Load(path)
