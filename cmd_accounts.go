@@ -41,6 +41,7 @@ func loadConfigFile(g *Globals) (*config.File, string, error) {
 }
 
 var accountColumns = []column{
+	idColumn,
 	{header: "CLIENT ID", keys: []string{"client_id"}},
 	{header: "KEY ID", keys: []string{"key_id"}},
 	{header: "DEFAULT", keys: []string{"default"}},

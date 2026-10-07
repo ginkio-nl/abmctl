@@ -13,6 +13,7 @@ type UsersCmd struct {
 }
 
 var userColumns = []column{
+	idColumn,
 	{header: "EMAIL", keys: []string{"email"}},
 	{header: "FIRST NAME", keys: []string{"firstName"}},
 	{header: "LAST NAME", keys: []string{"lastName"}},

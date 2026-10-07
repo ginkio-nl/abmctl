@@ -151,9 +151,13 @@ long `--coverage` or `--mdm-server-id` run slows down rather than failing.
 useful both for scripting and for seeing fields the table view doesn't show.
 
 `--output csv` prints the same columns as the table view, but as
-comma-separated values (ID column first) suitable for piping into a
+comma-separated values suitable for piping into a
 spreadsheet or another tool. Unlike the table view, missing fields are
 written as empty cells rather than `-`.
+
+Device output has no separate `ID` column: a device's ID is its serial
+number, so `SERIAL` is what you pass to `devices get`. Other resources
+show `ID` as their first column.
 
 ## Multiple accounts (config file)
 

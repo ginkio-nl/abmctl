@@ -13,6 +13,7 @@ type MDMServersCmd struct {
 }
 
 var mdmServerColumns = []column{
+	idColumn,
 	{header: "NAME", keys: []string{"serverName", "name"}},
 	{header: "TYPE", keys: []string{"serverType", "type"}},
 	{header: "UPDATED", keys: []string{"updatedDateTime", "updatedAt"}},

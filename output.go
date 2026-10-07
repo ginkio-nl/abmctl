@@ -20,6 +20,11 @@ type column struct {
 	value  func(r apiclient.Resource) string
 }
 
+// idColumn shows a resource's ID. Column sets include it explicitly, so
+// resources whose ID duplicates another column (devices, whose ID is their
+// serial number) can leave it out.
+var idColumn = column{header: "ID", value: func(r apiclient.Resource) string { return r.ID }}
+
 func (c column) get(r apiclient.Resource) string {
 	if c.value != nil {
 		return c.value(r)
@@ -67,34 +72,32 @@ func printTable(resources []apiclient.Resource, cols []column) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 	defer w.Flush()
 
-	fmt.Fprintln(w, "ID\t"+headerRow(cols))
+	fmt.Fprintln(w, headerRow(cols))
 	for _, r := range resources {
-		fmt.Fprintln(w, r.ID+"\t"+valueRow(r, cols))
+		fmt.Fprintln(w, valueRow(r, cols))
 	}
 	return nil
 }
 
-// printCSV writes resources as CSV: an ID column followed by cols, one
-// resource per row. Missing values are written as empty fields rather than
+// printCSV writes resources as CSV: one column per col, one resource per
+// row. Missing values are written as empty fields rather than
 // table view's "-", since CSV output is meant for scripting/spreadsheets.
 func printCSV(resources []apiclient.Resource, cols []column) error {
 	w := csv.NewWriter(os.Stdout)
 	defer w.Flush()
 
-	header := make([]string, len(cols)+1)
-	header[0] = "ID"
+	header := make([]string, len(cols))
 	for i, c := range cols {
-		header[i+1] = c.header
+		header[i] = c.header
 	}
 	if err := w.Write(header); err != nil {
 		return err
 	}
 
 	for _, r := range resources {
-		row := make([]string, len(cols)+1)
-		row[0] = r.ID
+		row := make([]string, len(cols))
 		for i, c := range cols {
-			row[i+1] = c.get(r)
+			row[i] = c.get(r)
 		}
 		if err := w.Write(row); err != nil {
 			return err
