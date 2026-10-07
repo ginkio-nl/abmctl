@@ -1,4 +1,4 @@
-module github.com/bart-lute/abmctl
+module github.com/ginkio-nl/abmctl
 
 go 1.24.7
 

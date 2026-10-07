@@ -10,7 +10,7 @@ means adding a field and a `Run` method there -- not hand-editing a usage
 string or a switch statement.
 
 ```bash
-go install github.com/bart-lute/abmctl@latest
+go install github.com/ginkio-nl/abmctl@latest
 ```
 
 ## 1. Create an API account in Apple Business Manager
@@ -78,7 +78,7 @@ when a config file is in use.
 ## 4. Install and try it
 
 ```bash
-go install github.com/bart-lute/abmctl@latest
+go install github.com/ginkio-nl/abmctl@latest
 abmctl auth test
 ```
 

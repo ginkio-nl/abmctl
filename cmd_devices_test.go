@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bart-lute/abmctl/internal/apiclient"
-	"github.com/bart-lute/abmctl/internal/coveragecache"
+	"github.com/ginkio-nl/abmctl/internal/apiclient"
+	"github.com/ginkio-nl/abmctl/internal/coveragecache"
 )
 
 type staticTokens struct{}

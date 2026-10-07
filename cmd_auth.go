@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bart-lute/abmctl/internal/apiclient"
+	"github.com/ginkio-nl/abmctl/internal/apiclient"
 )
 
 // AuthCmd groups authentication-related utility commands.

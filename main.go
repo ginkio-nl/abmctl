@@ -16,9 +16,9 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/bart-lute/abmctl/internal/apiclient"
-	"github.com/bart-lute/abmctl/internal/auth"
-	"github.com/bart-lute/abmctl/internal/config"
+	"github.com/ginkio-nl/abmctl/internal/apiclient"
+	"github.com/ginkio-nl/abmctl/internal/auth"
+	"github.com/ginkio-nl/abmctl/internal/config"
 )
 
 // Globals holds the flags/env vars shared by every subcommand: ABM

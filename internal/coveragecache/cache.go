@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/bart-lute/abmctl/internal/apiclient"
-	"github.com/bart-lute/abmctl/internal/config"
+	"github.com/ginkio-nl/abmctl/internal/apiclient"
+	"github.com/ginkio-nl/abmctl/internal/config"
 )
 
 // DefaultMaxAge is how long a device's coverage is reused before it's
