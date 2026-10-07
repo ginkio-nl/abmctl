@@ -34,7 +34,7 @@ func TestListServerDevicesFetchesEachLinkedDevice(t *testing.T) {
 	defer srv.Close()
 
 	client := apiclient.New(srv.URL, staticTokens{}, srv.Client())
-	devices, err := listServerDevices(context.Background(), client, "srv1", false)
+	devices, err := listServerDevices(context.Background(), client, "srv1")
 	if err != nil {
 		t.Fatalf("listServerDevices: %v", err)
 	}

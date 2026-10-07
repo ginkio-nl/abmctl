@@ -24,7 +24,7 @@ func TestGetListSinglePage(t *testing.T) {
 	defer srv.Close()
 
 	c := New(srv.URL, staticTokens{}, srv.Client())
-	resources, err := c.GetList(context.Background(), "/mdmServers", nil, false)
+	resources, err := c.GetList(context.Background(), "/mdmServers", nil)
 	if err != nil {
 		t.Fatalf("GetList: %v", err)
 	}
@@ -39,41 +39,30 @@ func TestGetListSinglePage(t *testing.T) {
 	}
 }
 
-func TestGetListFollowsPaginationWhenAll(t *testing.T) {
-	pages := 0
+func TestGetListFollowsPagination(t *testing.T) {
+	var gotLimit string
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pages++
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Query().Get("page") == "2" {
 			_, _ = w.Write([]byte(`{"data":[{"id":"2","type":"mdmServers"}],"links":{"self":"x"}}`))
 			return
 		}
+		gotLimit = r.URL.Query().Get("limit")
 		fmt.Fprintf(w, `{"data":[{"id":"1","type":"mdmServers"}],"links":{"self":"x","next":"%s/mdmServers?page=2"}}`, srv.URL)
 	}))
 	defer srv.Close()
 
 	c := New(srv.URL, staticTokens{}, srv.Client())
-
-	// all=false: stop after first page.
-	resources, err := c.GetList(context.Background(), "/mdmServers", nil, false)
+	resources, err := c.GetList(context.Background(), "/mdmServers", nil)
 	if err != nil {
 		t.Fatalf("GetList: %v", err)
 	}
-	if len(resources) != 1 {
-		t.Fatalf("expected 1 resource without --all, got %d", len(resources))
+	if len(resources) != 2 || resources[0].ID != "1" || resources[1].ID != "2" {
+		t.Fatalf("unexpected resources: %+v", resources)
 	}
-
-	// all=true: follow links.next.
-	resources, err = c.GetList(context.Background(), "/mdmServers", nil, true)
-	if err != nil {
-		t.Fatalf("GetList (all): %v", err)
-	}
-	if len(resources) != 2 {
-		t.Fatalf("expected 2 resources with --all, got %d", len(resources))
-	}
-	if resources[0].ID != "1" || resources[1].ID != "2" {
-		t.Fatalf("unexpected resource order: %+v", resources)
+	if gotLimit != "1000" {
+		t.Fatalf("first request limit = %q, want 1000", gotLimit)
 	}
 }
 

@@ -31,7 +31,7 @@ var deviceColumns = []column{
 
 // DevicesListCmd lists devices, optionally scoped to one MDM server.
 type DevicesListCmd struct {
-	All         bool   `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
+	All         bool   `name:"all" hidden:"" help:"No-op, kept for existing scripts: every device is always listed."`
 	MDMServerID string `name:"mdm-server-id" help:"List only devices assigned to this MDM server (fetches each device individually, so it's slower for large servers)."`
 	CoverageFlags
 }
@@ -41,9 +41,9 @@ func (c *DevicesListCmd) Run(g *Globals, client *apiclient.Client) error {
 	var resources []apiclient.Resource
 	var err error
 	if c.MDMServerID != "" {
-		resources, err = listServerDevices(ctx, client, c.MDMServerID, c.All)
+		resources, err = listServerDevices(ctx, client, c.MDMServerID)
 	} else {
-		resources, err = client.GetList(ctx, "/orgDevices", nil, c.All)
+		resources, err = client.GetList(ctx, "/orgDevices", nil)
 	}
 	if err != nil {
 		return err
@@ -112,8 +112,8 @@ func (d *duration) UnmarshalText(text []byte) error {
 
 // sortByOrderDate sorts devices oldest order first, with devices that have
 // no (parseable) order date last. Ties fall back to serial number so the
-// order is stable between runs. The API has no sort parameter, so this
-// only orders what was fetched -- without --all, just the first page.
+// order is stable between runs. The API has no sort parameter, which is
+// why this happens client-side.
 func sortByOrderDate(devices []apiclient.Resource) {
 	ordered := func(d apiclient.Resource) (time.Time, bool) {
 		t, err := time.Parse(time.RFC3339, d.Str("orderDateTime"))
@@ -138,8 +138,8 @@ func sortByOrderDate(devices []apiclient.Resource) {
 // server. The server's relationships endpoint only returns linkages (type
 // and ID, no attributes), and /orgDevices can't be filtered by server, so
 // each linked device is fetched individually.
-func listServerDevices(ctx context.Context, client *apiclient.Client, serverID string, all bool) ([]apiclient.Resource, error) {
-	links, err := client.GetList(ctx, "/mdmServers/"+serverID+"/relationships/devices", nil, all)
+func listServerDevices(ctx context.Context, client *apiclient.Client, serverID string) ([]apiclient.Resource, error) {
+	links, err := client.GetList(ctx, "/mdmServers/"+serverID+"/relationships/devices", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func fetchCoverage(ctx context.Context, client *apiclient.Client, devices []apic
 		if showProgress {
 			fmt.Fprintf(os.Stderr, "\rFetching coverage %d/%d (%d cached)", i+1, len(todo), len(devices)-len(todo))
 		}
-		records, err := client.GetList(ctx, "/orgDevices/"+d.ID+"/appleCareCoverage", nil, true)
+		records, err := client.GetList(ctx, "/orgDevices/"+d.ID+"/appleCareCoverage", nil)
 		var apiErr *apiclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
 			records, err = nil, nil

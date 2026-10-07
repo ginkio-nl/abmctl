@@ -99,13 +99,13 @@ abmctl auth test
 abmctl accounts list
 abmctl accounts set-default <name>
 
-abmctl mdm-servers list [--all]
+abmctl mdm-servers list
 abmctl mdm-servers get <id>
 
-abmctl devices list [--all] [--mdm-server-id ID] [--coverage] [--refresh-coverage] [--coverage-max-age 7d]
+abmctl devices list [--mdm-server-id ID] [--coverage] [--refresh-coverage] [--coverage-max-age 7d]
 abmctl devices get <id> [--coverage] [--refresh-coverage] [--coverage-max-age 7d]
 
-abmctl users list [--all]
+abmctl users list
 abmctl users get <id>
 ```
 
@@ -115,8 +115,11 @@ Global flags (valid on every command): `--client-id`, `--team-id`,
 request/response trace to stderr, never the key or full token),
 `--no-token-cache` (see below).
 
-`--all` follows pagination (`links.next`) and fetches every page; without
-it you get just the first page, which is faster for a quick look.
+`list` commands always return every result. The API pages its responses
+(100 per page by default); `abmctl` asks for its maximum of 1000 per page
+and follows `links.next` until the last one, so up to 1000 results take a
+single request. Pipe through `head` for a quick look. The old `--all` flag
+is still accepted, but does nothing.
 
 `devices list --mdm-server-id` is slower than a plain `devices list`: the
 API only returns the IDs of a server's devices, so `abmctl` fetches each
@@ -129,8 +132,7 @@ cell in CSV.
 
 `devices list` is sorted by `ORDERED`, oldest first, with devices that have
 no order date last -- in every output format. The API can't sort, so
-`abmctl` sorts what it fetched: without `--all` that's only the first page,
-not the oldest devices overall.
+`abmctl` does this itself after fetching every device.
 
 `--coverage` adds AppleCare/warranty coverage (including Apple's Limited
 Warranty) as `COVERAGE`, `COVERAGE STATUS`, and `COVERAGE END` columns. A
@@ -273,21 +275,23 @@ for Sign in with Apple):
    `https://api-business.apple.com/v1`, re-authenticating automatically
    when the cached token is close to expiry.
 
-## A note on accuracy
+## API notes
 
-Apple's official Business Manager API reference wasn't directly reachable
-while building this, so the request/response shapes here (JWT claim names,
-the `aud` value, endpoint paths like `/orgDevices` and `/mdmServers`, and
-the JSON:API `links.next` pagination style) are reconstructed from several
-independent third-party write-ups and open-source Go/Swift clients for this
-same API, cross-checked against each other (and, for the role/account setup
-steps and the `iss` claim, against the real account creation flow). `auth
-test` and `mdm-servers list` are the two commands to run first against your
-real account -- if either behaves unexpectedly, the exact device/server/user
-attribute names are the most likely remaining culprit, and are easy to
-adjust in `cmd_devices.go` / `cmd_mdmservers.go` / `cmd_users.go`. `--output json` always shows the raw
-payload regardless, so nothing is hidden if the table view's column guesses
-are off.
+Endpoints, attribute names, and pagination follow Apple's
+[Apple Business API reference](https://developer.apple.com/documentation/applebusinessapi),
+and every command has been run against a real Apple Business account.
+A few behaviors the reference doesn't spell out, observed in practice:
+
+- **Pages** hold 100 results unless `limit` is set (maximum 1000), and
+  responses carry no total count -- only a `links.next` while more remain.
+- **Rate limiting** is strict: a handful of parallel requests already gets
+  `429 RATE_LIMIT_EXCEEDED`, with no `Retry-After` or rate-limit headers.
+  It recovers within about a minute, which is what `abmctl`'s backoff is
+  sized for.
+- **A device's ID is its serial number.**
+
+`--output json` always shows the raw payload, so if Apple adds or renames
+fields, they're visible there before the table columns catch up.
 
 ## Project layout
 

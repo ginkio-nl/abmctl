@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -129,15 +130,24 @@ func (c *Client) GetOne(ctx context.Context, path string) (Resource, error) {
 	return env.Data, nil
 }
 
-// GetList fetches resources at path. If all is true, it follows the
-// response's links.next until exhausted, accumulating every page;
-// otherwise it returns just the first page.
-func (c *Client) GetList(ctx context.Context, path string, query url.Values, all bool) ([]Resource, error) {
-	var out []Resource
-	next := c.BaseURL + normalizePath(path)
-	if q := query.Encode(); q != "" {
-		next += "?" + q
+// MaxPageSize is the largest page the ABM API serves (its documented
+// maximum for limit); without it, pages default to 100 resources.
+const MaxPageSize = 1000
+
+// GetList fetches every resource at path, following links.next until the
+// last page. Pages are requested at MaxPageSize unless query sets its own
+// limit, so most lists take a single request.
+func (c *Client) GetList(ctx context.Context, path string, query url.Values) ([]Resource, error) {
+	q := url.Values{}
+	for k, v := range query {
+		q[k] = v
 	}
+	if q.Get("limit") == "" {
+		q.Set("limit", strconv.Itoa(MaxPageSize))
+	}
+
+	var out []Resource
+	next := c.BaseURL + normalizePath(path) + "?" + q.Encode()
 
 	for next != "" {
 		body, err := c.getURL(ctx, next)
@@ -150,9 +160,6 @@ func (c *Client) GetList(ctx context.Context, path string, query url.Values, all
 		}
 		out = append(out, env.Data...)
 
-		if !all || env.Links.Next == "" {
-			break
-		}
 		next = env.Links.Next
 	}
 	return out, nil

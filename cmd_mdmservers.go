@@ -21,11 +21,11 @@ var mdmServerColumns = []column{
 
 // MDMServersListCmd lists all MDM servers.
 type MDMServersListCmd struct {
-	All bool `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
+	All bool `name:"all" hidden:"" help:"No-op, kept for existing scripts: every result is always listed."`
 }
 
 func (c *MDMServersListCmd) Run(g *Globals, client *apiclient.Client) error {
-	resources, err := client.GetList(context.Background(), "/mdmServers", nil, c.All)
+	resources, err := client.GetList(context.Background(), "/mdmServers", nil)
 	if err != nil {
 		return err
 	}

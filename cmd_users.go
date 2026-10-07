@@ -22,11 +22,11 @@ var userColumns = []column{
 
 // UsersListCmd lists all users in the organization.
 type UsersListCmd struct {
-	All bool `name:"all" help:"Follow pagination and fetch every page (default: first page only)."`
+	All bool `name:"all" hidden:"" help:"No-op, kept for existing scripts: every result is always listed."`
 }
 
 func (c *UsersListCmd) Run(g *Globals, client *apiclient.Client) error {
-	resources, err := client.GetList(context.Background(), "/users", nil, c.All)
+	resources, err := client.GetList(context.Background(), "/users", nil)
 	if err != nil {
 		return err
 	}
