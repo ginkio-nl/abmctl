@@ -12,10 +12,19 @@ import (
 )
 
 // column describes one table column: a header and the resource attribute
-// key(s) to pull the value from (first match wins).
+// key(s) to pull the value from (first match wins), or a value func for
+// columns that aren't a plain attribute.
 type column struct {
 	header string
 	keys   []string
+	value  func(r apiclient.Resource) string
+}
+
+func (c column) get(r apiclient.Resource) string {
+	if c.value != nil {
+		return c.value(r)
+	}
+	return r.FirstStr(c.keys...)
 }
 
 // printResources renders resources as pretty-printed JSON (the full,
@@ -85,7 +94,7 @@ func printCSV(resources []apiclient.Resource, cols []column) error {
 		row := make([]string, len(cols)+1)
 		row[0] = r.ID
 		for i, c := range cols {
-			row[i+1] = r.FirstStr(c.keys...)
+			row[i+1] = c.get(r)
 		}
 		if err := w.Write(row); err != nil {
 			return err
@@ -111,7 +120,7 @@ func valueRow(r apiclient.Resource, cols []column) string {
 		if i > 0 {
 			s.WriteString("\t")
 		}
-		v := r.FirstStr(c.keys...)
+		v := c.get(r)
 		if v == "" {
 			v = "-"
 		}

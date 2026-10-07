@@ -6,11 +6,13 @@ package apiclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the production Apple Business Manager API base URL.
@@ -31,6 +33,14 @@ type Client struct {
 	// (method, URL, and response status -- never headers or bodies that
 	// might carry a token).
 	Debug func(line string)
+
+	// MaxRetries is how many times a request rejected with 429 Too Many
+	// Requests is retried before giving up. Apple sends no Retry-After
+	// header, so each retry waits RetryBaseDelay, doubling per attempt up
+	// to RetryMaxDelay.
+	MaxRetries     int
+	RetryBaseDelay time.Duration
+	RetryMaxDelay  time.Duration
 }
 
 // New returns a Client ready to call the ABM API.
@@ -41,7 +51,14 @@ func New(baseURL string, tokens TokenProvider, httpClient *http.Client) *Client 
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), HTTP: httpClient, Tokens: tokens}
+	return &Client{
+		BaseURL:        strings.TrimRight(baseURL, "/"),
+		HTTP:           httpClient,
+		Tokens:         tokens,
+		MaxRetries:     6,
+		RetryBaseDelay: 2 * time.Second,
+		RetryMaxDelay:  60 * time.Second,
+	}
 }
 
 // Resource is a generic JSON:API-style resource. Attributes and
@@ -149,7 +166,28 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) ([]byte
 	return c.getURL(ctx, u)
 }
 
+// getURL GETs fullURL, retrying with exponential backoff while the API
+// answers 429 Too Many Requests.
 func (c *Client) getURL(ctx context.Context, fullURL string) ([]byte, error) {
+	delay := c.RetryBaseDelay
+	for attempt := 0; ; attempt++ {
+		body, err := c.getOnce(ctx, fullURL)
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusTooManyRequests || attempt >= c.MaxRetries {
+			return body, err
+		}
+
+		c.trace("rate limited, retrying in %s (retry %d/%d)", delay, attempt+1, c.MaxRetries)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, c.RetryMaxDelay)
+	}
+}
+
+func (c *Client) getOnce(ctx context.Context, fullURL string) ([]byte, error) {
 	token, err := c.Tokens.AccessToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("abm api: getting access token: %w", err)

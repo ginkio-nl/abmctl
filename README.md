@@ -102,8 +102,8 @@ abmctl accounts set-default <name>
 abmctl mdm-servers list [--all]
 abmctl mdm-servers get <id>
 
-abmctl devices list [--all] [--mdm-server-id ID]
-abmctl devices get <id>
+abmctl devices list [--all] [--mdm-server-id ID] [--coverage]
+abmctl devices get <id> [--coverage]
 
 abmctl users list [--all]
 abmctl users get <id>
@@ -126,6 +126,20 @@ The devices table shows `ORDERED` (`orderDateTime`, when the order was
 placed) and `ADDED` (`addedToOrgDateTime`, when the device joined your
 organization) as separate columns; a missing value shows as `-` in the table and an empty
 cell in CSV.
+
+`--coverage` adds AppleCare/warranty coverage (including Apple's Limited
+Warranty) as `COVERAGE`, `COVERAGE STATUS`, and `COVERAGE END` columns. A
+device can have several coverage records; the table shows an active one
+over an expired one, then the one ending last. `--output json` includes
+every record under a `coverage` field on each device. It's off by default
+because it costs one extra request per device -- about a second each -- and
+the requests run one at a time, since Apple's rate limit is low enough that
+parallel requests mostly get rejected. A progress counter is shown on
+stderr while it runs.
+
+Requests rejected by Apple's rate limit (HTTP 429) are retried
+automatically, waiting 2s and doubling up to 60s between attempts, so a
+long `--coverage` or `--mdm-server-id` run slows down rather than failing.
 
 `--output json` prints the full, untouched API response for each resource --
 useful both for scripting and for seeing fields the table view doesn't show.

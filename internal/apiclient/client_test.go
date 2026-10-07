@@ -2,10 +2,12 @@ package apiclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 type staticTokens struct{}
@@ -110,5 +112,49 @@ func TestGetOneReturnsAPIError(t *testing.T) {
 	}
 	if apiErr.StatusCode != http.StatusNotFound {
 		t.Fatalf("StatusCode = %d, want 404", apiErr.StatusCode)
+	}
+}
+
+func TestGetRetriesOnTooManyRequests(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls <= 2 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"abc","type":"orgDevices"}}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, staticTokens{}, srv.Client())
+	c.RetryBaseDelay = time.Millisecond
+	resource, err := c.GetOne(context.Background(), "/orgDevices/abc")
+	if err != nil {
+		t.Fatalf("GetOne: %v", err)
+	}
+	if resource.ID != "abc" || calls != 3 {
+		t.Fatalf("resource.ID = %q after %d calls, want abc after 3", resource.ID, calls)
+	}
+}
+
+func TestGetGivesUpAfterMaxRetries(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, staticTokens{}, srv.Client())
+	c.MaxRetries = 2
+	c.RetryBaseDelay = time.Millisecond
+	_, err := c.GetOne(context.Background(), "/orgDevices/abc")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected a 429 *APIError, got %v", err)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3 (1 + 2 retries)", calls)
 	}
 }
